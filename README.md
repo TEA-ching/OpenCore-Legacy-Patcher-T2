@@ -12,9 +12,9 @@ A Python-based project revolving around [Acidanthera's OpenCorePkg](https://gith
 
 **Progress:**
 - [x] USB installer drive is detected
-- [] Installer boots to the setup screen - there are confirmed initialization issues on T2 MacBooks; Mac mini 2018 and iMac Pro may not exhibit these issues
-- [🛑] macOS boots properly - maybe except Mac mini 2018 and iMac Pro
-- [🛑] all devices (including USB, GPU etc) is working - not everything is working yet; GPU uses VESA mode for now, USB is working on Mac mini 2018 mainly - this issue affects T2 Macs only
+- [X] Installer boots to the setup screen - MacBook Air 2020 may require more patches to be able to boot the installer; to boot the installer on the 2018-2020 MacBook Pro and the 2018 Mac mini; you need to disable Secure Boot and then disable SIP via csrutil disable and csrutol-authenticated-boot disable.
+- [🛑] macOS boots properly - it says "macOS Tahoe" is not compatible to your Mac. Currently working on it.
+- [🛑] all devices (including USB, GPU etc) is working - WiFi and USB is confirmed working on the 2018 Mac mini; GPU accelaration on macOS 26 Tahoe is still early to say because I can't manage to install macOS 26 Tahoe yet.
 
 Our goal of this project is to add support for T2 Macs so unsupported T2 Macs can boot into Sequoia and Tahoe. This project may run on non-T2 Macs, but support is limited for those and that's not the focus of this project.
 
