@@ -1,0 +1,36 @@
+#include <Headers/kern_api.hpp>
+#include <Headers/kern_util.hpp>
+
+// Das Ziel: Die originale Funktion im Apple-Treiber, 
+// die die Modell-Identität vom T2-Chip validiert.
+static const char* targetSymbol = "__ZN23AppleT2DeviceInterface15getBridgeConfigEPK"; 
+
+// Unsere Ersatz-Funktion (Der Hook)
+const char* myHookedGetBridgeConfig(void* instance, const char* originalModel) {
+    
+    // 1. Wir rufen die originale Funktion auf, um die echte Antwort vom T2 zu bekommen
+    // const char* realT2Model = FunctionCast(myHookedGetBridgeConfig, orgGetBridgeConfig)(instance, originalModel);
+
+    // 2. Wir prüfen: Wenn der T2 "J680" (MBP 2018) sagt, 
+    // lügen wir und sagen "J132" (MBP 2020), was macOS Sequoia besser gefällt.
+    
+    if (strcmp(originalModel, "J680") == 0) {
+        DBGLOG("T2Patch", "T2 sagte J680, wir antworten mit J132 für die Kompatibilität.");
+        return "J132"; 
+    }
+
+    return originalModel;
+}
+
+// Die Lilu-Initialisierung: Hier sagen wir dem System, wo der Patch angewendet werden soll
+void patchT2Controller(void* user, KernelPatcher& patcher) {
+    // Wir suchen nach dem AppleT2Controller Kext im Speicher
+    auto KextT2 = patcher.loadKext("com.apple.driver.AppleT2Controller");
+    
+    if (KextT2) {
+        // Wir setzen den Hook: Jedes Mal, wenn macOS nach der Bridge-Config fragt, 
+        // wird unsere Funktion aufgerufen statt der originalen.
+        patcher.routeFunction(targetSymbol, myHookedGetBridgeConfig, true);
+        DBGLOG("T2Patch", "Hook für T2-Controller erfolgreich gesetzt.");
+    }
+}
