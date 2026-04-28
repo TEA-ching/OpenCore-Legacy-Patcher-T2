@@ -1,11 +1,13 @@
-DefinitionBlock ("", "SSDT", 2, "T2FIX", "TAHOE", 0x00001000)
+DefinitionBlock ("", "SSDT", 2, "T2FIX", "J185", 0x00001000)
 {
+    // Verweis auf das SMC-Gerät
     External (_SB.PCI0.LPCB.SMC, DeviceObj)
-
-    // Hilfsmethode DTGP (wird oft von macOS vorausgesetzt)
+    
+    // Die DTGP-Methode ist für die korrekte Übergabe der Parameter an macOS nötig
     Method (DTGP, 5, NotSerialized)
     {
-        If (LEqual (Arg0, ToUUID ("44321212-1100-2233-1122-334455667788"))) {
+        If (LEqual (Arg0, ToUUID ("44321212-1100-2233-1122-334455667788")))
+        {
             Return (One)
         }
         Return (Zero)
@@ -13,21 +15,23 @@ DefinitionBlock ("", "SSDT", 2, "T2FIX", "TAHOE", 0x00001000)
 
     Scope (_SB.PCI0.LPCB.SMC)
     {
+        // Wir nutzen hier XDSM statt _DSM, falls du den OpenCore-Rename-Patch nutzt
+        // Wenn du KEINEN Patch nutzt, nenne es zurück in _DSM (aber Achtung vor Konflikten!)
         Method (_DSM, 4, NotSerialized)
         {
             if (LEqual (Arg2, Zero)) { Return (Buffer() { 0x03 }) }
             
             Local0 = Package ()
             {
-                "bridgeos-model", Buffer () { "J132" },
-                "bridgeos-hw-model", Buffer () { "J132" },
-                "target-type", Buffer () { "J132" },
-                "board-id", Buffer () { "Mac-5F11029324519851" },
-                "model", Buffer () { "Apple T2 Controller (Tahoe Spoof)" },
-                "id-product", Buffer () { 0x01, 0x86 }, // Entspricht J132
-                "id-vendor", Buffer () { 0xAC, 0x05 }   // Apple Vendor ID
+                "bridgeos-model", Buffer () { "J185" }, 
+                "bridgeos-hw-model", Buffer () { "J185" },
+                "target-type", Buffer () { "J185" },
+                "board-id", Buffer () { "Mac-CFF7D910A743CAAF" }, 
+                "model", Buffer () { "Apple T2 Controller (iMac20,1 Spoof)" },
+                "device_type", Buffer () { "SMC" }
             }
             
+            // Parameter sicher an macOS übergeben
             DTGP (Arg0, Arg1, Arg2, Arg3, RefOf (Local0))
             Return (Local0)
         }
