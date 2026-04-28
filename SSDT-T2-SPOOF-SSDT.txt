@@ -1,24 +1,35 @@
 DefinitionBlock ("", "SSDT", 2, "T2FIX", "TAHOE", 0x00001000)
 {
-    // Externer Verweis auf das SMC Gerät
     External (_SB.PCI0.LPCB.SMC, DeviceObj)
+
+    // Hilfsmethode DTGP (wird oft von macOS vorausgesetzt)
+    Method (DTGP, 5, NotSerialized)
+    {
+        If (LEqual (Arg0, ToUUID ("44321212-1100-2233-1122-334455667788"))) {
+            Return (One)
+        }
+        Return (Zero)
+    }
 
     Scope (_SB.PCI0.LPCB.SMC)
     {
-        // Wir überschreiben die Device Specific Method
         Method (_DSM, 4, NotSerialized)
         {
             if (LEqual (Arg2, Zero)) { Return (Buffer() { 0x03 }) }
             
-            Return (Package ()
+            Local0 = Package ()
             {
-                "model", Buffer () { "Apple T2 Controller (Spoofed J132)" },
                 "bridgeos-model", Buffer () { "J132" },
                 "bridgeos-hw-model", Buffer () { "J132" },
                 "target-type", Buffer () { "J132" },
-                "board-id", Buffer () { "Mac-5F11029324519851" }, // Muss mit SMBIOS übereinstimmen
-                "device_type", Buffer () { "SMC" }
-            })
+                "board-id", Buffer () { "Mac-5F11029324519851" },
+                "model", Buffer () { "Apple T2 Controller (Tahoe Spoof)" },
+                "id-product", Buffer () { 0x01, 0x86 }, // Entspricht J132
+                "id-vendor", Buffer () { 0xAC, 0x05 }   // Apple Vendor ID
+            }
+            
+            DTGP (Arg0, Arg1, Arg2, Arg3, RefOf (Local0))
+            Return (Local0)
         }
     }
 }
