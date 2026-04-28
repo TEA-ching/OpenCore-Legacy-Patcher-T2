@@ -8,6 +8,8 @@ A Python-based project revolving around [Acidanthera's OpenCorePkg](https://gith
 > **⚠️ EXPERIMENTAL FORK** — Adds **macOS 15 Sequoia and macOS 26 Tahoe support for T2 Macs**. T2 Macs as of now are unsupported by the official OpenCore Legacy Patcher from Dortania. Use it at your own risk. It's still in alpha stage, so I highly recommend to backup all your data and do it only on a spare T2 Mac to experiment.
 ## T2 Mac Support
 
+> **⚠️ EXPERIMENTAL BRANCH** — This branch is considered pre-alpha. Since upgrading to OpenCore 1.0.7 is very sensitive process, it will become mainstream alpha when considered fully stable.
+
 > **🚧 Not ready for general use**
 
 **Progress:**
@@ -18,7 +20,7 @@ A Python-based project revolving around [Acidanthera's OpenCorePkg](https://gith
 - [🛑] macOS boots properly - it says "macOS Tahoe" is not compatible to your Mac.
 <img width="5712" height="4284" alt="IMG_0131" src="https://github.com/user-attachments/assets/6c19de49-d402-4795-ab45-1e1f5558a527" />
 
-Currently working on it.
+This branch is designed exactly to fix this issue.
 - [🛑] all devices (including USB, GPU etc) is working - WiFi and USB is confirmed working on the 2018 Mac mini; GPU accelaration on macOS 26 Tahoe is still early to say because I can't manage to install macOS 26 Tahoe yet.
 
 Our goal of this project is to add support for T2 Macs so unsupported T2 Macs can boot into Sequoia and Tahoe. This project may run on non-T2 Macs, but support is limited for those and that's not the focus of this project.
