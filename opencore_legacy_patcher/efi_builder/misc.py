@@ -5,6 +5,7 @@ misc.py: Class for handling Misc Patches, invocation from build.py
 import shutil
 import logging
 import binascii
+import sys
 
 from pathlib import Path
 
