@@ -480,6 +480,7 @@ xw
         
         kernel_patches = self.config.get("Kernel", {}).get("Patch", [])
         
+        # We search using the correct identifier key `"Identifier"` and the expected name `"com.apple.driver.AppleSEPManager"`
         sep_patch = support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
             kernel_patches,
             "Identifier",
@@ -504,7 +505,7 @@ xw
                 "Limit": 0,
                 "Mask": b"",
                 "MaxKernel": "",
-                "MinKernel": "24.0.0",
+                "MinKernel": "24.6.0",
                 "Replace": b"\x48\x83\xBF\xB0\x03\x00\x00\x00\xEB\x4F",
                 "ReplaceMask": b"",
                 "Skip": 0
