@@ -6,6 +6,7 @@ import shutil
 import logging
 import binascii
 import sys
+import os
 
 from pathlib import Path
 
