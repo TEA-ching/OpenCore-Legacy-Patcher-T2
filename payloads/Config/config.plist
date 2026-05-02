@@ -45,26 +45,32 @@
             <key>Patch</key>
             <array>
                 <dict>
+                    <key>Arch</key>
+                    <string>Any</string>
                     <key>Base</key>
                     <string></string>
                     <key>BaseSkip</key>
                     <integer>0</integer>
                     <key>Comment</key>
-                    <string>Prevent AppleSEPManager SEP timeout panic on T2 Macs (Sequoia/Tahoe)</string>
+                    <string>Prevent AppleSEPManager SEP timeout panic on T2 Macs</string>
                     <key>Count</key>
                     <integer>1</integer>
                     <key>Enabled</key>
                     <true/>
                     <key>Find</key>
-                    <data>SI0NAAAAAEG4KQMAADHA6AAAAAA=</data>
+                    <data>P09T/w==</data>
+                    <key>Identifier</key>
+                    <string>com.apple.driver.AppleSEPManager</string>
                     <key>Limit</key>
                     <integer>0</integer>
                     <key>Mask</key>
-                    <data>////AAAAAP///////////wAAAAA=</data>
-                    <key>OemTableId</key>
                     <data></data>
+                    <key>MaxKernel</key>
+                    <string></string>
+                    <key>MinKernel</key>
+                    <string>24.0.0</string>
                     <key>Replace</key>
-                    <data>McBdw5CQkJCQkJCQkJCQkJCQkJA=</data>
+                    <data>P09T/w==</data>
                     <key>ReplaceMask</key>
                     <data></data>
                     <key>Skip</key>
