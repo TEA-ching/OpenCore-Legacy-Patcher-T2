@@ -426,6 +426,7 @@ xw
                 # or exit gracefully rather than continuing in an undefined state.
             except Exception as e:
                 logging.error(f"UNEXPECTED ERROR in T1 handling: {e}")
+                sys.exit(3)
             
     def _t2_handling(self) -> None:
         """
@@ -515,4 +516,5 @@ xw
         if sep_patch:
             sep_patch["Enabled"] = True
         else:
-            logging.warning("!!! Could not find AppleSEPManager patch in template, skipping enable...")
+            logging.warning("We couldn't enable necessary Apple Secure Enclave Processor patches. Aborting...")
+            sys.exit(3)
