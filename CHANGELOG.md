@@ -8,6 +8,7 @@ This release fixes a config.plist bug that doesn't build OpenCore properly on no
 - Upgrades Lilu to 1.72
 - Fix a vulnerability that lets attackers skip injecting necessary T2 kexts to launch a DoS attack - this vulnerability affects this repository only)
 - Fix a vulnerability that lets attackers claim the EFI is built when the EFI is broken to launch a DoS attack on any Mac - this vulnerability affects this repository only
+To fix these vulnerabilities, if you are running 3.1. pre-alpha 1, update immediately to the latest pre-alpha release. If you are using the alpha version instead, you should wait until a later alpha version is released since this vulnerability is not patched yet in the alpha release.
 
 ## 3.1.1 pre-alpha 1:
 This version begins the upgrade from OpenCore 1.0.5 to 1.0.7 (but hasn't fully upgraded yet). Still it uses mostly 1.0.5.
