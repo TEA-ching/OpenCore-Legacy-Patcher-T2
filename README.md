@@ -18,10 +18,10 @@ A Python-based project revolving around [Acidanthera's OpenCorePkg](https://gith
 - [ ] Upgrade OpenCore-RELEASE.zip to OpenCore 1.0.7
 - [ ] Upgrade OpenCore-DEBUG.zip to OpenCore 1.0.7
 - [X] Fix https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues/23 - done
-- [X] Update RestrictEvents to 1.1.6 - 
-- [X] Update CryptexFixup to 1.0. - 
-- [X] Update FeatureUnlock to 1.1.8 - 
-- [X] Set DisableIoMapper to True for T2 Macs - 
+- [X] Update RestrictEvents to 1.1.6 - done
+- [X] Update CryptexFixup to 1.0. - done
+- [X] Update FeatureUnlock to 1.1.8 - done
+- [X] Set DisableIoMapper to True for T2 Macs - done
 - [X] Remove USB port mapping for MacBookAir8,1 and 8,2 - done
 - [ ] Return support for MacBookAir8,1 and MacBookAir8,2
 
