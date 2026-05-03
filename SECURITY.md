@@ -2,6 +2,8 @@
 
 ## Up to date Versions
 
+Ensure you are running one of the latest up-to-date versions:
+
 | Version | Latest version          |
 | ------- | ------------------ |
 | 3.1.0 alpha 3 (the emergency update)  | :white_check_mark: |
@@ -9,4 +11,8 @@
 
 ## Reporting a Vulnerability
 
-To report a vulnerability, go to Issues, open a new issue about the vulnerability with a [Vulnerability] tag. I'm not against opening a vulnerability without a vulnerability tag, but with the vulnerability tag, my bugtracker will be cleaner and I will know exactly which issues are other issues and which of them are vulnerabilities. But please, make sure that the report doesn't icnlude malware inside the proof of concept if you add a proof of concept. But please, don't report disabling SIP and AMFI as vulnerabilities - if you report these as vulnerabilities, it will be dismissed - these are part of bypassing the minimum requirements.
+To report a security issue, please open a new issue on our bug tracker and follow these guidelines:
+
+1. **Use the `[Vulnerability]` Tag:** Prepend `[Vulnerability]` to the issue title to help us keep our tracker organized.
+2. **Safe Proof of Concepts (PoC):** If you include a Proof of Concept, ensure it does not contain or distribute any real malware.
+3. **Out-of-Scope Reports:** **Do not** report disabling SIP (System Integrity Protection) or AMFI (Apple Mobile File Integrity) as vulnerabilities. These are necessary components for bypassing minimum system requirements and will be dismissed.
