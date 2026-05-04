@@ -90,8 +90,6 @@ To run the project from source, see here: [Build and run from source](./SOURCE.m
   * Great amounts of help with debugging, and code suggestions
 * [Ausdauersportler](https://github.com/Ausdauersportler)
   * iMacs Metal GPUs Upgrade Patch set and documentation
-* [laobamac and all other OCLP-Mod developers](https://github.com/laobamac/OCLP-Mod/tree/main)
-All OCLP-Mod developers for KDK and application requirements, including laobamac
 * [vit9696](https://github.com/vit9696)
 * [Albert Müller](https://github.com/albert-mueller/)
   * Adding support for unsupported T2 Macs and the main author of this fork
