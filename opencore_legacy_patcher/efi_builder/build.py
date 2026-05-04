@@ -120,10 +120,6 @@ class BuildOpenCore:
             "MacBookPro16,1", "MacBookPro16,2", "MacBookPro16,3", 
             "MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "Macmini8,1"
         ]
-
-        if self.model in t2_models:
-            is_t2_mac = True
-
         # 3. Apply T2-specific kexts and arguments conditionally based on hardware
         is_t2_mac = False
 
@@ -152,8 +148,24 @@ class BuildOpenCore:
                     ("FeatureUnlock.kext", "1.1.6")
                 ]
                 
+                kexts_dir = Path(self.constants.kexts_path)
+                
                 for kext_name, version in forced_kexts:
-                    # Manually ensure the kext is added to the configuration list
+                    kext_path = kexts_dir / kext_name
+                    
+                    # If kext is not found on disk, attempt to extract/locate it from the cache
+                    if not kext_path.exists():
+                        logging.warning(f"Kext {kext_name} not found at {kext_path}. Searching for fallback source.")
+                        # Look inside the zip templates if necessary
+                        zip_path = Path(self.constants.build_path) / "Kexts.zip" # Or equivalent archive path
+                        if zip_path.exists():
+                            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                                # Extract just the missing kext to destination
+                                for member in zip_ref.namelist():
+                                    if member.startswith(kext_name):
+                                        zip_ref.extract(member, kexts_dir)
+                                        
+                    # Add to plist configuration entry
                     if "Kernel" in self.config and "Add" in self.config["Kernel"]:
                         if not any(kext_entry.get("BundlePath") == kext_name for kext_entry in self.config["Kernel"]["Add"]):
                             self.config["Kernel"]["Add"].append({
@@ -166,7 +178,8 @@ class BuildOpenCore:
                                 "MinKernel": "20.0.0",
                                 "PlistPath": "Contents/Info.plist"
                             })
-                        # Set to True
+                            
+                        # Set 'Enabled' to True for that kext
                         for kext_entry in self.config["Kernel"]["Add"]:
                             if kext_entry.get("BundlePath") == kext_name:
                                 kext_entry["Enabled"] = True
