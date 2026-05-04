@@ -124,6 +124,22 @@ class BuildOpenCore:
         if self.model in t2_models:
             is_t2_mac = True
 
+        # 3. Apply T2-specific kexts and arguments conditionally based on hardware
+        is_t2_mac = False
+
+        if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
+            is_t2_mac = True
+
+        t2_models = [
+            "iMacPro1,1", "iMac19,1", "iMac19,2", "MacBookPro15,1", 
+            "MacBookPro15,2", "MacBookPro15,3", "MacBookPro15,4", 
+            "MacBookPro16,1", "MacBookPro16,2", "MacBookPro16,3", 
+            "MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "Macmini8,1"
+        ]
+
+        if self.model in t2_models:
+            is_t2_mac = True
+
         if is_t2_mac:
             try:
                 logging.info("- Injecting T2-specific bypass kexts (post-process)")
@@ -137,16 +153,24 @@ class BuildOpenCore:
                 ]
                 
                 for kext_name, version in forced_kexts:
-                    support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                        kext_name, version, self.constants.kexts_path # <-- Changed kext_path to kexts_path
-                    )
-                    
-                    # Ensure individual elements are explicitly enabled in the plist dictionary
+                    # Manually ensure the kext is added to the configuration list
                     if "Kernel" in self.config and "Add" in self.config["Kernel"]:
+                        if not any(kext_entry.get("BundlePath") == kext_name for kext_entry in self.config["Kernel"]["Add"]):
+                            self.config["Kernel"]["Add"].append({
+                                "Arch": "x86_64",
+                                "BundlePath": kext_name,
+                                "Comment": kext_name.split('.')[0],
+                                "Enabled": True,
+                                "ExecutablePath": f"Contents/MacOS/{kext_name.split('.')[0]}",
+                                "MaxKernel": "",
+                                "MinKernel": "20.0.0",
+                                "PlistPath": "Contents/Info.plist"
+                            })
+                        # Set to True
                         for kext_entry in self.config["Kernel"]["Add"]:
                             if kext_entry.get("BundlePath") == kext_name:
                                 kext_entry["Enabled"] = True
-
+                
                 # Add and merge T2 specific arguments
                 t2_args = {"-ibtcompatbeta", "-amfipassbeta", "revpatch=sbvmm"}
                 current_args_set = set(self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"].split())
