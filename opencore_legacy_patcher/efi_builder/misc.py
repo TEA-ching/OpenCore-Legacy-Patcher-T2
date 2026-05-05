@@ -459,11 +459,6 @@ xw
         elif self.model in ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "MacBookPro16,3"]:
             logging.info(f"- {self.model}: Applying Unsupported Mantissa Speed kernel panic patches")
             logging.info(f"- {self.model}: Removing USBMap/UTBMap/USBToolBox to avoid unsupported mantissa speed panic")
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USBMap.kext")["Enabled"] = False
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("UTBMap.kext")["Enabled"] = False
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("UTBMap.kext")["Enabled"] = False
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USBToolBox.kext")["Enabled"] = False
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USBToolBox.kext")["Enabled"] = False
             support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["Enabled"] = False
             support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Tahoe-Map.kext")["Enabled"] = False
         else:
