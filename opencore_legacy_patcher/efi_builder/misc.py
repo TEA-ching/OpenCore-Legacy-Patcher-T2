@@ -456,7 +456,7 @@ xw
                 support.BuildSupport(self.model, self.constants, self.config).enable_kext(
                     "WhateverGreen.kext", self.constants.whatevergreen_version, self.constants.whatevergreen_path
                 )
-        elif self.model in ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "MacBookPro10,3"]:
+        elif self.model in ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "MacBookPro16,3"]:
             logging.info(f"- {self.model}: Applying Unsupported Mantissa Speed kernel panic patches")
             logging.info(f"- {self.model}: Removing USBMap/UTBMap/USBToolBox to avoid unsupported mantissa speed panic")
         else:
