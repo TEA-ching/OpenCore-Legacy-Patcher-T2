@@ -87,13 +87,6 @@ class BuildOpenCore:
             "MacBookAir8,1",
             "MacBookAir8,2",
             "MacBookAir9,1",
-            "MacBookPro16,2",
-        ]
-        # T2 Macs with mantissa-speed panic when USBMap-like kexts are injected
-        t2_mantissa_bug_models = [
-            "MacBookAir8,1",
-            "MacBookAir8,2",
-            "MacBookAir9,1",
             "MacBookPro16,3",
         ]
 
