@@ -459,14 +459,17 @@ xw
         elif self.model in ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "MacBookPro16,3"]:
             logging.info(f"- {self.model}: Applying Unsupported Mantissa Speed kernel panic patches")
             logging.info(f"- {self.model}: Disable USB-Map.kext or/and USB-Map-Tahoe.kext to avoid unsupported mantissa speed panics")
-            if support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["Enabled"] == True:
-                logging.info("We found USB-Map.kext. Disabling...")
-                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["Enabled"] = False
-            if support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map-Tahoe.kext")["Enabled"] == True:
-                logging.info("We found USB-Map-Tahoe.kext. Disabling...")
-                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map-Tahoe.kext")["Enabled"] = False
-            else:
-                logging.info("We couldn't find USB-Map.kext, nor USB-Map-Tahoe.kext, skipping disable...")
+            try:
+                if support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["Enabled"] == True:
+                    logging.info("We found USB-Map.kext. Disabling...")
+                    support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["Enabled"] = False
+                if support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map-Tahoe.kext")["Enabled"] == True:
+                    logging.info("We found USB-Map-Tahoe.kext. Disabling...")
+                    support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map-Tahoe.kext")["Enabled"] = False
+                else:
+                    logging.info("We couldn't find USB-Map.kext, nor USB-Map-Tahoe.kext, skipping disable...")
+            except Exception as E:
+                logging.info("We have some troubles disabling USB-Map.kext and USB-Map-Tahoe.kext. It may be because the file is missing or the synthax is invalid. Skipping...")
         else:
             # Rest of the models (Standard T2 behavior)
             logging.info("- Enabling WhateverGreen for T2 Mac iGPU rendering")
