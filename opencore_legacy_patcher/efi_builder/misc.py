@@ -28,7 +28,6 @@ from ..datasets import (
 class BuildMiscellaneous:
     """
     Build Library for Miscellaneous Hardware and Software Support
-xw
     Invoke from build.py
     """
 
