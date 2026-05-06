@@ -167,31 +167,41 @@ class BuildOpenCore:
         """
         Set revision information in config.plist
         """
-
-        self.config["#Revision"]["Build-Version"] = f"{self.constants.patcher_version} - {date.today()}"
+    
+        # --- Safe access to #Revision ---
+        rev = self.config.setdefault("#Revision", {})
+        rev["Build-Version"] = f"{self.constants.patcher_version} - {date.today()}"
+    
         if not self.constants.custom_model:
-            self.config["#Revision"]["Build-Type"] = "OpenCore Built on Target Machine"
+            rev["Build-Type"] = "OpenCore Built on Target Machine"
             computer_copy = copy.copy(self.constants.computer)
             computer_copy.ioregistry = None
-            self.config["#Revision"]["Hardware-Probe"] = pickle.dumps(computer_copy)
+            rev["Hardware-Probe"] = pickle.dumps(computer_copy)
         else:
-            self.config["#Revision"]["Build-Type"] = "OpenCore Built for External Machine"
-        self.config["#Revision"]["OpenCore-Version"] = f"{self.constants.opencore_version} - {'DEBUG' if self.constants.opencore_debug is True else 'RELEASE'}"
-        self.config["#Revision"]["Original-Model"] = self.model
-        self.config["NVRAM"]["Add"]["4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"]["OCLP-Version"] = f"{self.constants.patcher_version}"
-        self.config["NVRAM"]["Add"]["4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"]["OCLP-Model"] = self.model
+            rev["Build-Type"] = "OpenCore Built for External Machine"
     
+        rev["OpenCore-Version"] = (
+            f"{self.constants.opencore_version} - "
+            f"{'DEBUG' if self.constants.opencore_debug else 'RELEASE'}"
+        )
+        rev["Original-Model"] = self.model
     
-    def _save_config(self) -> None:
-        try:
-            """
-            Save config.plist to disk
-            """
+        # --- Hardened NVRAM structure ---
+        nvram = self.config.setdefault("NVRAM", {})
+        add   = nvram.setdefault("Add", {})
+    
+        guid_key = "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"
+        guid     = add.setdefault(guid_key, {})
+    
+        # Validate type to avoid malicious plist poisoning
+        if not isinstance(guid, dict):
+            logging.error(f"NVRAM GUID {guid_key} is not a dictionary — refusing to write metadata")
+            return
+    
+        # --- Safe writes ---
+        guid["OCLP-Version"] = f"{self.constants.patcher_version}"
+        guid["OCLP-Model"]   = self.model
 
-            plistlib.dump(self.config, Path(self.constants.plist_path).open("wb"), sort_keys=True)
-        except Exception as e:
-            logging.error(f"Function Error: {e}")
-            sys.exit(3)
     
     
     def _build_opencore(self) -> None:
@@ -206,13 +216,27 @@ class BuildOpenCore:
         """
 
         # Generate OpenCore Configuration
-        self._build_efi()
-        if self.constants.allow_oc_everywhere is False or self.constants.allow_native_spoofs is True or (self.constants.custom_serial_number != "" and self.constants.custom_board_serial_number != ""):
-            smbios.BuildSMBIOS(self.model, self.constants, self.config).set_smbios()
-        support.BuildSupport(self.model, self.constants, self.config).cleanup()
-        self._save_config()
+        try:
+            logging.info("Generating OpenCore configuration for {self.model} ...")
+            self._build_efi()
+        except Exception as e:
+            logging.error("Whoops, Generating OpenCore configuration for {self.model} because of the following error:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
+        try:
+            if self.constants.allow_oc_everywhere is False or self.constants.allow_native_spoofs is True or (self.constants.custom_serial_number != "" and self.constants.custom_board_serial_number != ""):
+                smbios.BuildSMBIOS(self.model, self.constants, self.config).set_smbios()
+            support.BuildSupport(self.model, self.constants, self.config).cleanup()
+            self._save_config()
+        except Exception as e:
+            logging.error("Whoops, spoofing the SMBIOS for {self.model} failed because of the following error:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
 
         # Post-build handling
+        logging.info("Post-build handling")
         support.BuildSupport(self.model, self.constants, self.config).sign_files()
         support.BuildSupport(self.model, self.constants, self.config).validate_pathing()
 
