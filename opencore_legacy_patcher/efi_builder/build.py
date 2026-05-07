@@ -84,7 +84,15 @@ class BuildOpenCore:
             try:
                 logging.info("- Adding T2-specific bypass kexts")
                 # 1. Helper Kexts
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext("CryptexFixup.kext", "1.1.0", self.constants.kext_path)
+                try:
+                    logging.info("Enabling CryptexFixup.kext")
+                    support.BuildSupport(self.model, self.constants, self.config).enable_kext("CryptexFixup.kext", "1.1.0", self.constants.kext_path)
+                except Exception as e:
+                    logging.error("Injecting CryptexFixup.kext failed because of the following error:")
+                    logging.exception("Stack Trace:") # This prints the full technical error
+                    logging.info("We'll skip injecting CryptexFixup.kext for now. You'll need to inject it manually.")
+                    continue
+                
                 support.BuildSupport(self.model, self.constants, self.config).enable_kext("WhateverGreen.kext", "1.7.0", self.constants.kext_path)
             
                 # AMFIPass is critical for root patching (GPU drivers) on Tahoe
