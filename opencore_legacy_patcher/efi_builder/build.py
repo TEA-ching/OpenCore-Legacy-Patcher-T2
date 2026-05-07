@@ -90,8 +90,8 @@ class BuildOpenCore:
                 except Exception as e:
                     logging.error("Injecting CryptexFixup.kext failed because of the following error:")
                     logging.exception("Stack Trace:") # This prints the full technical error
-                    logging.info("We'll skip injecting CryptexFixup.kext for now. You'll need to inject it manually.")
-                    continue
+                    logging.info("Please try again later.")
+                    sys.exit(3)
                 
                 support.BuildSupport(self.model, self.constants, self.config).enable_kext("WhateverGreen.kext", "1.7.0", self.constants.kext_path)
             
