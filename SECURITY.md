@@ -6,8 +6,7 @@ Ensure you are running one of the latest up-to-date versions:
 
 | Version | Latest version          |
 | ------- | ------------------ |
-| 3.1.0 alpha 3 (the emergency update)  | :white_check_mark: |
-| 3.1.1 pre-alpha 5  | :white_check_mark: |
+| 3.1.1 pre-alpha release candidate 3+ | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
