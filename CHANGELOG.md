@@ -1,7 +1,9 @@
 # OpenCore Legacy Patcher T2 changelog
 ## 4.0.0 alpha 1:
+Thank you, @GUTY345 for contributing to this project!
 This release:
-- fixes a corrupted USB-Map.plist
+- fixes a corrupted USB-Map.plist, thanks to @GUTY345
+- fixes a bug where SMBIOS spoofing doesn't work on T2 Macs, thanks to @GUTY345
 - Fixes a bug where CryptexFixup isn't injected properly
 - Fixed the following vulnerabilities:
 1. Nested‑dictionary KeyError → DoS vulnerability (FIXED)
@@ -26,7 +28,9 @@ Fixed: builder no longer trusts external input blindly
 
 
 Diese Version:
-- Behebt eine beschädigte USB-Map.plist
+@GUTY345, Danke, dass Sie zu diesem Projekt beigetragt haben.
+- Behebt eine beschädigte USB-Map.plist, dank @GUTY345
+- behebt einen Fehler, indem SMBIOS-Spoofing auf T2 Macs gar nicht funktionierte, dank @GUTY345
 - Behebt einen Fehler, der die korrekte Einbindung von CryptexFixup verhinderte
 - Behebt die folgenden Sicherheitslücken:
 1. KeyError → DoS-Sicherheitslücke (BEHOBEN)
