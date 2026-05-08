@@ -230,7 +230,6 @@ class BuildSMBIOS:
                     agpm_config = plistlib.load(Path(new_agpm_ls).open("rb"))
                     if self.model in agpm_config["IOKitPersonalities"]["AGPM"]["Machines"]:
                         agpm_config["IOKitPersonalities"]["AGPM"]["Machines"][self.spoofed_board] = agpm_config["IOKitPersonalities"]["AGPM"]["Machines"].pop(self.model)
-                    agpm_config["IOKitPersonalities"]["AGPM"]["Machines"][self.spoofed_board] = agpm_config["IOKitPersonalities"]["AGPM"]["Machines"].pop(self.model)
                     if self.model == "MacBookPro6,2":
                         # Force G State to not exceed moderate state
                         # Ref: https://github.com/fabioiop/MBP-2010-GPU-Panic-fix
