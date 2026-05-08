@@ -471,7 +471,15 @@ class BuildMiscellaneous:
             logging.exception("Stack Trace:") # This prints the full technical error
             logging.info("Please try again later.")
             sys.exit(3)
-        
+        try:
+            logging.info("Enabling AMFIPass.kext")
+            # AMFIPass is critical for root patching (GPU drivers) on Tahoe
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext("AMFIPass.kext", "1.4.1", self.constants.kext_path)
+        except Exception as e:
+            logging.error("Injecting AMFIPass.kext failed because of the following error:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
         if self.model in ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "MacBookPro16,3"]:
             logging.info(f"- {self.model}: Applying Unsupported Mantissa Speed kernel panic patches")
             logging.info(f"- {self.model}: Disable USB-Map.kext or/and USB-Map-Tahoe.kext to avoid unsupported mantissa speed panics")
