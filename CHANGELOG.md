@@ -1,4 +1,17 @@
 # OpenCore Legacy Patcher T2 changelog
+## 4.0.0 alpha 2:
+This version:
+- fixes a bug where AMFIPass.kext is not injected on T2 Macs
+- fixes a bug where WhateverGreen.kext is injected twice
+- MacBook Air 2018 and MacBook Air 2019 support is returning - now with a lot of work done, it's safe to boot these MacBooks onto an unsupported macOS's installer.
+- Download macOS installer icon is changed to macOS 26 Tahoe from an old macOS beta icon
+
+Dieses Version:
+- Behebt einen Fehler, indem AMFIPass.kext auf T2 Macs nicht injiziert wurde
+- Behebt einen Fehler, indem WhateverGreen.kext zweimals injiziert wurde
+- Unterstützung von MacBook Air 2018 und MacBook Air 2019 ist wiederhergestellt - jetzt ist sicherer, diese MacBooks aufs nicht unterstützten macOS-Version-Installationsprogramm zu booten als in Version wie OpenCore Legacy Patcher T2 3.1.0 Alpha 3, wo OpenCore 1.0.5 noch verwendet wurde. 
+- Den Icon fürs Download macOS installer (macOS-Installationsprogramme herunterladen) ist aufs macOS 26 Tahoe von einen alten macOS beta gewechselt.
+
 ## 4.0.0 alpha 1:
 Thank you, @GUTY345 for contributing to this project!
 This release:
