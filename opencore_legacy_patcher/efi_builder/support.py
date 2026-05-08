@@ -79,7 +79,7 @@ class BuildSupport:
 
     def enable_kext(self, kext_name: str, kext_version: str, kext_path: Path, check: bool = False) -> None:
         """
-        Enables a kext in the config.plist
+        Enables a kext in the config.plist, extracting from ZIP if necessary.
         """
         kext: dict = self.get_kext_by_bundle_path(kext_name)
 
@@ -89,35 +89,44 @@ class BuildSupport:
         if kext["Enabled"] is True:
             return
 
-        # Handle subdirectories (like Acidanthera)
+        # 1. Check if the kext exists as a ZIP first
+        # We look for something like 'CryptexFixup-v1.0.5-RELEASE.zip' or similar
+        zip_pattern = f"**/{kext_name.replace('.kext', '')}*.zip"
+        potential_zips = list(kext_path.glob(zip_pattern))
+
+        if potential_zips:
+            logging.info(f"- Extracting {potential_zips[0].name}...")
+            try:
+                with zipfile.ZipFile(potential_zips[0], 'r') as zip_ref:
+                    # Extract into the kext_path (e.g., payloads/Kexts/)
+                    zip_ref.extractall(kext_path)
+            except Exception as e:
+                logging.info(f"- Failed to extract ZIP: {e}")
+
+        # 2. Locate the extracted .kext (searching subfolders like Acidanthera)
         source_path = kext_path / kext_name
         if not source_path.exists():
-            # Search recursively for the kext if not in root
             potential_paths = list(kext_path.glob(f"**/{kext_name}"))
             if potential_paths:
                 source_path = potential_paths[0]
             else:
-                logging.info(f"- Failed to find {kext_name} in {kext_path}")
+                logging.info(f"- Failed to find {kext_name} after extraction check.")
                 return
 
         logging.info(f"- Adding {kext_name} {kext_version}")
 
-        # Use copytree for directory bundles (.kext)
+        # 3. Define destination and copy using copytree
         destination_path = self.constants.kexts_path / kext_name
         
         try:
             if destination_path.exists():
-                if destination_path.is_dir():
-                    shutil.rmtree(destination_path)
-                else:
-                    destination_path.unlink()
+                shutil.rmtree(destination_path) if destination_path.is_dir() else destination_path.unlink()
             
             shutil.copytree(source_path, destination_path)
             kext["Enabled"] = True
         except Exception as e:
             logging.info(f"- Error injecting {kext_name}: {e}")
             raise e
-
     def sign_files(self) -> None:
         """
         Signs files for on OpenCorePkg's Vault system
