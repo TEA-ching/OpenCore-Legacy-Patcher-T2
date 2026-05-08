@@ -57,9 +57,13 @@ class BuildSMBIOS:
                     support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(self.config["Booter"]["Patch"], "Comment", "Skip Board ID check")["Enabled"] = True
 
             else:
-                logging.info("- Enabling SMC exemption patch")
-                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(self.config["Kernel"]["Patch"], "Identifier", "com.apple.driver.AppleSMC")["Enabled"] = True
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext("SMC-Spoof.kext", self.constants.smcspoof_version, self.constants.smcspoof_path)
+                try:
+                    logging.info("- Enabling SMC exemption patch")
+                    support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(self.config["Kernel"]["Patch"], "Identifier", "com.apple.driver.AppleSMC")["Enabled"] = True
+                    support.BuildSupport(self.model, self.constants, self.config).enable_kexts("SMC-Spoof.kext", self.constants.smcspoof_version, self.constants.smcspoof_path)
+                except Exception as E:
+                    logging.info("AppleSMC couldn't be injected due to some issues. Aborting...")
+                    sys.exit(3)
 
         if self.constants.serial_settings in ["Moderate", "Advanced"]:
             logging.info("- Enabling USB Rename Patches")
