@@ -83,8 +83,6 @@ class BuildOpenCore:
         if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
             try:
                 logging.info("- Adding T2-specific bypass kexts")
-                # 1. Helper Kexts
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext("WhateverGreen.kext", "1.7.0", self.constants.kext_path)
             
                 # AMFIPass is critical for root patching (GPU drivers) on Tahoe
                 support.BuildSupport(self.model, self.constants, self.config).enable_kext("AMFIPass.kext", "1.4.1", self.constants.kext_path)
