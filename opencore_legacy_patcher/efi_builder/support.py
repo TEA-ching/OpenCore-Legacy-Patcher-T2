@@ -79,7 +79,7 @@ class BuildSupport:
 
     def enable_kext(self, kext_name: str, kext_version: str, kext_path: Path, check: bool = False) -> None:
         """
-        Enables a kext in the config.plist, extracting from ZIP if necessary.
+        Enables a kext in the config.plist, searching payloads/Kexts for the source.
         """
         kext: dict = self.get_kext_by_bundle_path(kext_name)
 
@@ -89,33 +89,41 @@ class BuildSupport:
         if kext["Enabled"] is True:
             return
 
-        # 1. Check if the kext exists as a ZIP first
-        # We look for something like 'CryptexFixup-v1.0.5-RELEASE.zip' or similar
+        # 1. Force the script to look in the actual Payloads folder for the source
+        # self.constants.kexts_path usually points to the build destination
+        # We need the source folder where the ZIPs and Kexts actually live
+        payload_source_dir = self.constants.payload_kexts_path if hasattr(self.constants, 'payload_kexts_path') else kext_path
+
+        # 2. Check for and extract ZIP if needed
         zip_pattern = f"**/{kext_name.replace('.kext', '')}*.zip"
-        potential_zips = list(kext_path.glob(zip_pattern))
+        potential_zips = list(payload_source_dir.glob(zip_pattern))
 
         if potential_zips:
-            logging.info(f"- Extracting {potential_zips[0].name}...")
             try:
                 with zipfile.ZipFile(potential_zips[0], 'r') as zip_ref:
-                    # Extract into the kext_path (e.g., payloads/Kexts/)
-                    zip_ref.extractall(kext_path)
+                    # Extract directly into the payload folder so we can find it
+                    zip_ref.extractall(payload_source_dir)
             except Exception as e:
-                logging.info(f"- Failed to extract ZIP: {e}")
+                logging.info(f"- Failed to extract {potential_zips[0].name}: {e}")
 
-        # 2. Locate the extracted .kext (searching subfolders like Acidanthera)
-        source_path = kext_path / kext_name
+        # 3. Locate the .kext source (searching recursively)
+        source_path = payload_source_dir / kext_name
         if not source_path.exists():
-            potential_paths = list(kext_path.glob(f"**/{kext_name}"))
+            potential_paths = list(payload_source_dir.glob(f"**/{kext_name}"))
             if potential_paths:
                 source_path = potential_paths[0]
             else:
-                logging.info(f"- Failed to find {kext_name} after extraction check.")
-                return
+                # Last ditch effort: look in the kext_path provided by the caller
+                potential_paths = list(kext_path.glob(f"**/{kext_name}"))
+                if potential_paths:
+                    source_path = potential_paths[0]
+                else:
+                    logging.info(f"- Failed to find {kext_name} after extraction check.")
+                    return
 
         logging.info(f"- Adding {kext_name} {kext_version}")
 
-        # 3. Define destination and copy using copytree
+        # 4. Destination is ALWAYS the build folder's Kexts directory
         destination_path = self.constants.kexts_path / kext_name
         
         try:
@@ -126,7 +134,7 @@ class BuildSupport:
             kext["Enabled"] = True
         except Exception as e:
             logging.info(f"- Error injecting {kext_name}: {e}")
-            raise e
+
     def sign_files(self) -> None:
         """
         Signs files for on OpenCorePkg's Vault system
