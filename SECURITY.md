@@ -6,7 +6,7 @@ Ensure you are running one of the latest up-to-date versions:
 
 | Version | Latest version          |
 | ------- | ------------------ |
-| 4.0.0 alpha 1 | :white_check_mark: |
+| 4.0.0 alpha 2 | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
