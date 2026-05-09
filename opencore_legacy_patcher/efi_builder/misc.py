@@ -488,6 +488,16 @@ class BuildMiscellaneous:
                     logging.info("We couldn't find USB-Map.kext, nor USB-Map-Tahoe.kext, skipping disable...")
             except Exception as E:
                 logging.info("We have some troubles disabling USB-Map.kext and USB-Map-Tahoe.kext. It may be because the file is missing or the synthax is invalid. Skipping...")
+            try:
+               logging.info("- Skipping Language and Region selection")
+                # Sets the language to English (Universal) and avoids the initial picker
+                self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["prev-lang:kbd"] = "en-US:0"
+            except Exception as e:
+                logging.error("Skipping language and region selection failed because of the following error:")
+                logging.exception("Stack Trace:") # This prints the full technical error
+                logging.info("Please try again later.")
+                logging.info(f"On your {self.model}, skipping the language selection is absolutely required to avoid Unsupported Mantissa speed kernel panics.")
+                sys.exit(3)
         # Sequoia installer checks hardware compatibility and refuses to proceed
         # silently (gray screen hang) on unsupported T2 Macs. This bypasses it.
         logging.info("- Adding -no_compat_check for T2 Macs running unsupported macOS versions")
