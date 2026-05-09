@@ -1,4 +1,8 @@
-# OpenCore Legacy Patcher T2 changelog
+# OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungslog
+## 4.0.0 alpha 3:
+This release fixes a bug where when spoofing, SMC-Spoof.kext won't get injected.
+Dieser Version behebt einen Fehler, indem SMC-Spoof.kext nicht injiziert wurde.
+
 ## 4.0.0 alpha 2:
 This version:
 - fixes a bug where AMFIPass.kext is not injected on T2 Macs
