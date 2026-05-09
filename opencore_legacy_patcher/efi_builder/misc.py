@@ -488,7 +488,6 @@ class BuildMiscellaneous:
                     logging.info("We couldn't find USB-Map.kext, nor USB-Map-Tahoe.kext, skipping disable...")
             except Exception as E:
                 logging.info("We have some troubles disabling USB-Map.kext and USB-Map-Tahoe.kext. It may be because the file is missing or the synthax is invalid. Skipping...")
-            
             try:
                logging.info("- Skipping Language and Region selection")
                 # Sets the language to English (Universal) and avoids the initial picker
