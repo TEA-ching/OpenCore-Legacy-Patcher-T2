@@ -1,4 +1,17 @@
 # OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungslog
+## 4.0.0 alpha 4:
+Thanks @kodeaqua for contributing to this project for the research of MacBook Air 2018 and 2019! This helps us identify the issues it faces to boot into macOS Recovery that other people are facing. I myself only have Mac mini 2018 and MacBook Pro 2020 4 thunderbolt 3 ports and they work completely differently from these 2 MacBook Airs.
+This version:
+- fixes overall identation issues and other bugs
+- fixes a bug where MacBookAir9,1 that OpenCore Legacy Patcher T2 thought it wasn't a T2 Mac - to be more precise, it wasn't included in the T2_CHIP function - instead, when it saw MacBookAir9,1, it exited this function and continued to issue generic kexts and patches, and skipped patches for T2 Macs
+- Fixed Unsupported Mantissa speed bugs on MacBookAir8,1 through 9,1 and MacBookPro16,3 - as a workaround, the Select a language and region screen will be skipped and macOS Recovery on these models will be always English - United States.
+
+Dieser Version:
+Danke @kodeaqua, dass Sie zu diesem Projekt beigetragt haben über die Recherche für MacBook Air 2018 und MacBook Air 2019! Dies hilft uns, den Fehler, indem diese MacBooks nicht richtig in macOS-Wiederherstellung starten zu beheben, die andere Personen gemeldet haben. Ich habe nur MacBook Pro 2020 4 thunderbolt 3 ports und Mac mini 2018, und diese Modelle funktionieren anders als diesen MacBook Air-Modellen.
+- behebt unnötigen Leerplatzen und andere Fehler
+- Behebt einen Fehler, indem OpenCore Legacy Patcher T2 denkt als MacBookAir9,1 kein T2-Mac wäre - ich meine damit, dass der MacBookAir9,1 nicht in die T2_CHIP-Funktion erhaltete - stattdessen, wenn er weißt um welches Mac handelte (MacBookAir9,1), der App dann verlasste die T2_CHIP-Funktion und fährte weiter mit Standard-Kexts und Patches und überspringte Patches für T2 Macs
+- Behebt den Fehler, indem beim Anklicken von -> in Sprache auswählen, der T2-Kontroller abstürzte mit dem Fehler Unsupported Mantissa speed - als einen Umweg, der Sprache auswählen-Schritt wird übersprungen und der Sprache ins macOS-Wiederherstellung aufs MacBookAir8,1 bis MacBookAir9,1 und MacBookPro16,3 wird Englisch (USA) sein.
+
 ## 4.0.0 alpha 3:
 This release fixes a bug where when spoofing, SMC-Spoof.kext won't get injected.
 Dieser Version behebt einen Fehler, indem SMC-Spoof.kext nicht injiziert wurde.
