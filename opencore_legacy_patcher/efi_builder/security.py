@@ -52,8 +52,12 @@ class BuildSecurity:
                 logging.info(f"- Setting SIP value to: {self.constants.custom_sip_value}")
                 self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["csr-active-config"] = utilities.string_to_hex(self.constants.custom_sip_value.lstrip("0x"))
             elif self.constants.sip_status is False:
-                logging.info("- Set SIP to allow Root Volume patching")
-                self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["csr-active-config"] = binascii.unhexlify("03080000")
+                if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
+                    logging.info("- T2 Mac Detected: disabling SIP completely as it's necessary")
+                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["csr-active-config"] = binascii.unhexlify("EF0F0000")
+                else:
+                    logging.info("- Set SIP to allow Root Volume patching on non-T2 Macs")
+                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["csr-active-config"] = binascii.unhexlify("03080000")
 
             # apfs.kext has an undocumented boot-arg that allows FileVault usage on broken APFS seals (-arv_allow_fv)
             # This is however hidden behind kern.development, thus we patch _apfs_filevault_allowed to always return true
@@ -73,8 +77,12 @@ class BuildSecurity:
             # In Ventura, LV patch broke. For now, add AMFI arg
             # Before merging into mainline, this needs to be resolved
             if self.constants.disable_amfi is True:
-                logging.info("- Disabling AMFI")
-                self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " amfi=0x80"
+                if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
+                    logging.info("- Disabling AMFI on T2 Macs")
+                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " amfi=0x80 amfi_get_out_of_my_way=1"
+                else:
+                    logging.info("- Disabling AMFI on non-T2 Macs")
+                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " amfi=0x80"
             else:
                 logging.info("- Disabling Library Validation")
             support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement")["Enabled"] = True
@@ -99,3 +107,4 @@ class BuildSecurity:
             self.config["Misc"]["Security"]["ApECID"] = 0
             
             self.config["Misc"]["Security"]["DmgLoading"] = "Any"
+            self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -v"
