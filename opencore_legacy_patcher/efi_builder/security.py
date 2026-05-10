@@ -6,12 +6,9 @@ import logging
 import binascii
 
 from . import support
-
 from .. import constants
-
 from ..support import utilities
 from ..detections import device_probe
-
 from ..datasets import (
     smbios_data,
     os_data
@@ -33,64 +30,102 @@ class BuildSecurity:
 
         self._build()
 
+    def _update_nvram_string(self, uuid: str, key: str, value: str) -> None:
+        """
+        Appends a string value to an NVRAM variable only if it doesn't already exist.
+        Ensures proper spacing between arguments.
+        """
+        if uuid not in self.config["NVRAM"]["Add"]:
+            self.config["NVRAM"]["Add"][uuid] = {}
+        
+        current_value = self.config["NVRAM"]["Add"][uuid].get(key, "")
+        
+        if value not in current_value:
+            if current_value == "":
+                self.config["NVRAM"]["Add"][uuid][key] = value.strip()
+            else:
+                # Add a space only if the string isn't empty and doesn't already have one
+                self.config["NVRAM"]["Add"][uuid][key] = f"{current_value.rstrip()} {value.strip()}"
+
+    def _set_nvram_value(self, uuid: str, key: str, value: any, overwrite: bool = False) -> None:
+        """
+        Sets an NVRAM variable. If overwrite is False, it only sets if the key is missing.
+        """
+        if uuid not in self.config["NVRAM"]["Add"]:
+            self.config["NVRAM"]["Add"][uuid] = {}
+        
+        if overwrite or key not in self.config["NVRAM"]["Add"][uuid]:
+            self.config["NVRAM"]["Add"][uuid][key] = value
 
     def _build(self) -> None:
         """
         Kick off Security Build Process
         """
 
+        # UUID Constants for readability
+        APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
+        OCLP_NVRAM_UUID = "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"
+
         if self.constants.sip_status is False or self.constants.custom_sip_value:
             # Work-around 12.3 bug where Electron apps no longer launch with SIP lowered
-            # Unknown whether this is intended behavior or not, revisit with 12.4
             logging.info("- Adding ipc_control_port_options=0 to boot-args")
-            self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " ipc_control_port_options=0"
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
+
             # Adds AutoPkgInstaller for Automatic OpenCore-Patcher installation
-            # Only install if running the GUI (AutoPkg-Assets.pkg requires the GUI)
             if self.constants.wxpython_variant is True:
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext("AutoPkgInstaller.kext", self.constants.autopkg_version, self.constants.autopkg_path)
+                support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                    "AutoPkgInstaller.kext", self.constants.autopkg_version, self.constants.autopkg_path
+                )
+
             if self.constants.custom_sip_value:
                 logging.info(f"- Setting SIP value to: {self.constants.custom_sip_value}")
-                self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["csr-active-config"] = utilities.string_to_hex(self.constants.custom_sip_value.lstrip("0x"))
+                sip_hex = utilities.string_to_hex(self.constants.custom_sip_value.lstrip("0x"))
+                self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", sip_hex, overwrite=True)
+            
             elif self.constants.sip_status is False:
                 if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
-                    logging.info("- T2 Mac Detected: disabling SIP completely as it's necessary")
-                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["csr-active-config"] = binascii.unhexlify("EF0F0000")
+                    logging.info("- T2 Mac Detected: disabling SIP completely")
+                    self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("EF0F0000"), overwrite=True)
                 else:
                     logging.info("- Set SIP to allow Root Volume patching on non-T2 Macs")
-                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["csr-active-config"] = binascii.unhexlify("03080000")
+                    self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
 
-            # apfs.kext has an undocumented boot-arg that allows FileVault usage on broken APFS seals (-arv_allow_fv)
-            # This is however hidden behind kern.development, thus we patch _apfs_filevault_allowed to always return true
-            # Note this function was added in 11.3 (20E232, 20.4), older builds do not support this (ie. 11.2.3)
+            # apfs.kext FileVault patch
             logging.info("- Allowing FileVault on Root Patched systems")
-            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(self.config["Kernel"]["Patch"], "Comment", "Force FileVault on Broken Seal")["Enabled"] = True
-            # Lets us check in sys_patch.py if config supports FileVault
-            self.config["NVRAM"]["Add"]["4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"]["OCLP-Settings"] += " -allow_fv"
+            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                self.config["Kernel"]["Patch"], "Comment", "Force FileVault on Broken Seal"
+            )["Enabled"] = True
+            
+            self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_fv")
 
             # Patch KC UUID panics due to RSR installation
-            # - Ref: https://github.com/dortania/OpenCore-Legacy-Patcher/issues/1019
             logging.info("- Enabling KC UUID mismatch patch")
-            self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -nokcmismatchpanic"
-            support.BuildSupport(self.model, self.constants, self.config).enable_kext("RSRHelper.kext", self.constants.rsrhelper_version, self.constants.rsrhelper_path)
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-nokcmismatchpanic")
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                "RSRHelper.kext", self.constants.rsrhelper_version, self.constants.rsrhelper_path
+            )
 
         if self.constants.disable_cs_lv is True:
-            # In Ventura, LV patch broke. For now, add AMFI arg
-            # Before merging into mainline, this needs to be resolved
             if self.constants.disable_amfi is True:
                 if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
                     logging.info("- Disabling AMFI on T2 Macs")
-                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " amfi=0x80 amfi_get_out_of_my_way=1"
+                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80 amfi_get_out_of_my_way=1")
                 else:
                     logging.info("- Disabling AMFI on non-T2 Macs")
-                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " amfi=0x80"
+                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80")
             else:
                 logging.info("- Disabling Library Validation")
-            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement")["Enabled"] = True
-            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(self.config["Kernel"]["Patch"], "Comment", "Disable _csr_check() in _vnode_check_signature")["Enabled"] = True
-            self.config["NVRAM"]["Add"]["4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"]["OCLP-Settings"] += " -allow_amfi"
-            # CSLVFixup simply patches out __RESTRICT and __restrict out of the Music.app Binary
-            # Ref: https://pewpewthespells.com/blog/blocking_code_injection_on_ios_and_os_x.html
-            support.BuildSupport(self.model, self.constants, self.config).enable_kext("CSLVFixup.kext", self.constants.cslvfixup_version, self.constants.cslvfixup_path)
+                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                    self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement"
+                )["Enabled"] = True
+                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                    self.config["Kernel"]["Patch"], "Comment", "Disable _csr_check() in _vnode_check_signature"
+                )["Enabled"] = True
+                
+                self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_amfi")
+                support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                    "CSLVFixup.kext", self.constants.cslvfixup_version, self.constants.cslvfixup_path
+                )
 
         if self.constants.secure_status is False:
             logging.info("- Disabling SecureBootModel")
@@ -98,7 +133,10 @@ class BuildSecurity:
 
         if smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < os_data.os_data.sonoma:
             logging.info("- Enabling AMFIPass")
-            support.BuildSupport(self.model, self.constants, self.config).enable_kext("AMFIPass.kext", self.constants.amfipass_version, self.constants.amfipass_path)
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                "AMFIPass.kext", self.constants.amfipass_version, self.constants.amfipass_path
+            )
+
         if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
             logging.info("- T2 Mac Detected: Forcing SecureBootModel to Disabled for Tahoe")
             self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
@@ -107,4 +145,4 @@ class BuildSecurity:
             self.config["Misc"]["Security"]["ApECID"] = 0
             
             self.config["Misc"]["Security"]["DmgLoading"] = "Any"
-            self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -v"
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-v")
