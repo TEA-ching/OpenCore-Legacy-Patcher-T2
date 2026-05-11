@@ -139,23 +139,23 @@ class MainFrame(wx.Frame):
         index = 0
         max_height = 0
         # Create a dedicated horizontal sizer or just manually center them
-# Settings Button
-settings_btn = wx.Button(self, label="⚙️ Settings", pos=(200, max_height + 20), size=(120, 30))
-settings_btn.Bind(wx.EVT_BUTTON, self.on_settings)
-
-# Gemini Button
-gemini_btn = wx.Button(self, label="✨ Ask Gemini", pos=(330, max_height + 20), size=(150, 30))
-gemini_btn.Bind(wx.EVT_BUTTON, self.on_gemini_help)
-
-# Center them as a pair
-total_width = 120 + 10 + 150 # button1 + gap + button2
-start_x = (self.GetSize().width - total_width) // 2
-
-settings_btn.SetPosition((start_x, max_height + 20))
-gemini_btn.SetPosition((start_x + 130, max_height + 20))
-
-# Description for Gemini (Centered under the Gemini button)
-gemini_desc = wx.StaticText(self, label="AI Troubleshooting and\nInstallation help.", pos=(start_x + 130, max_height + 55))
+        # Settings Button
+        settings_btn = wx.Button(self, label="⚙️ Settings", pos=(200, max_height + 20), size=(120, 30))
+        settings_btn.Bind(wx.EVT_BUTTON, self.on_settings)
+        
+        # Gemini Button
+        gemini_btn = wx.Button(self, label="✨ Ask Gemini", pos=(330, max_height + 20), size=(150, 30))
+        gemini_btn.Bind(wx.EVT_BUTTON, self.on_gemini_help)
+        
+        # Center them as a pair
+        total_width = 120 + 10 + 150 # button1 + gap + button2
+        start_x = (self.GetSize().width - total_width) // 2
+        
+        settings_btn.SetPosition((start_x, max_height + 20))
+        gemini_btn.SetPosition((start_x + 130, max_height + 20))
+        
+        # Description for Gemini (Centered under the Gemini button)
+        gemini_desc = wx.StaticText(self, label="AI Troubleshooting and\nInstallation help.", pos=(start_x + 130, max_height + 55))
 gemini_desc.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
         for button_name, button_function in menu_buttons.items():
             # place icon
