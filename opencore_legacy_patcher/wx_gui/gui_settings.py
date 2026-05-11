@@ -925,7 +925,8 @@ class SettingsFrame(wx.Frame):
             logging.info(f"Using Custom Model: {selection}")
             self.constants.custom_model = selection
             defaults.GenerateDefaults(self.constants.custom_model, False, self.constants)
-            self.parent.build_button.Enable()
+            if hasattr(self.parent, 'build_button') and self.parent.build_button:
+                self.parent.build_button.Enable()
 
 
 
