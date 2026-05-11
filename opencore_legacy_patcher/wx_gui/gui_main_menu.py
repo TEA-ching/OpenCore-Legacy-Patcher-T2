@@ -59,25 +59,13 @@ class MainFrame(wx.Frame):
     def _generate_elements(self) -> None:
         """
         Generate UI elements for the main menu
-
-        Format:
-          - Title label: OpenCore Legacy Patcher v{X.Y.Z}
-          - Text:        Model: {Build or Host Model}
-          - Buttons:
-            - Build and Install OpenCore
-            - Post-Install Root Patch
-            - Create macOS Installer
-            - Settings
-            - Help
-            - Ask Gemini
-          - Text:        Copyright
         """
 
         # Logo
         logo = wx.StaticBitmap(self, bitmap=wx.Bitmap(str(self.constants.icns_resource_path / "OC-Patcher.icns"), wx.BITMAP_TYPE_ICON), pos=(-1, 0), size=(128, 128))
         logo.Centre(wx.HORIZONTAL)
 
-        # Title label: OpenCore Legacy Patcher v{X.Y.Z}
+        # Title label
         title_label = wx.StaticText(self, label=f"OpenCore Legacy Patcher for T2 Macs Insider Preview", pos=(-1, 128))
         title_label.SetFont(gui_support.font_factory(25, wx.FONTWEIGHT_BOLD))
         title_label.Centre(wx.HORIZONTAL)
@@ -87,125 +75,59 @@ class MainFrame(wx.Frame):
         version_label.Centre(wx.HORIZONTAL)
         version_label.SetForegroundColour(wx.Colour(128, 128, 128))
 
-        # Text: Model: {Build or Host Model}
+        # Model label
         model_label = wx.StaticText(self, label=f"Model: {self.constants.custom_model or self.constants.computer.real_model}", pos=(-1, version_label.GetPosition()[1] + 30))
         model_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         model_label.Centre(wx.HORIZONTAL)
         self.model_label = model_label
 
-        # Buttons:
+        # Main 4 Feature Buttons
         menu_buttons = {
             "Build and Install OpenCore": {
                 "function": self.on_build_and_install,
-                "description": [
-                    "Prepares provided drive to be able",
-                    "to boot unsupported OSes.",
-                    "Use on installers or internal drives."
-                ],
+                "description": ["Prepares provided drive to be able", "to boot unsupported OSes.", "Use on installers or internal drives."],
                 "icon": str(self.constants.icns_resource_path / "OC-Build.icns"),
             },
             "Create macOS Installer": {
                 "function": self.on_create_macos_installer,
-                "description": [
-                    "Download and flash a macOS",
-                    "Installer for your system.",
-                ],
+                "description": ["Download and flash a macOS", "Installer for your system."],
                 "icon": str(self.constants.icns_resource_path / "OC-Installer.icns"),
             },
             "Post-Install Root Patch": {
                 "function": self.on_post_install_root_patch,
-                "description": [
-                    "Installs hardware drivers and",
-                    "patches for your system after",
-                    "installing a new version of macOS.",
-                ],
+                "description": ["Installs hardware drivers and", "patches for your system after", "installing a new version of macOS."],
                 "icon": str(self.constants.icns_resource_path / "OC-Patch.icns"),
             },
-
             "Support": {
                 "function": self.on_help,
-                "description": [
-                    "Resources for OpenCore Legacy",
-                    "Patcher.",
-                ],
+                "description": ["Resources for OpenCore Legacy", "Patcher."],
                 "icon": str(self.constants.icns_resource_path / "OC-Support.icns"),
             },
         }
+
         button_x = 30
         button_y = model_label.GetPosition()[1] + 30
-        rollover = len(menu_buttons) / 2
-        if rollover % 1 != 0:
-            rollover = int(rollover) + 1
+        rollover = 2
         index = 0
         max_height = 0
-        # Create a dedicated horizontal sizer or just manually center them
-        # Settings Button
-        settings_btn = wx.Button(self, label="⚙️ Settings", pos=(200, max_height + 20), size=(120, 30))
-        settings_btn.Bind(wx.EVT_BUTTON, self.on_settings)
-        
-        # Gemini Button
-        gemini_btn = wx.Button(self, label="✨ Ask Gemini", pos=(330, max_height + 20), size=(150, 30))
-        gemini_btn.Bind(wx.EVT_BUTTON, self.on_gemini_help)
-        
-        # Center them as a pair
-        total_width = 120 + 10 + 150 # button1 + gap + button2
-        start_x = (self.GetSize().width - total_width) // 2
-        
-        settings_btn.SetPosition((start_x, max_height + 20))
-        gemini_btn.SetPosition((start_x + 130, max_height + 20))
-        
-        # Description for Gemini (Centered under the Gemini button)
-        gemini_desc = wx.StaticText(self, label="AI Troubleshooting and\nInstallation help.", pos=(start_x + 130, max_height + 55))
-gemini_desc.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
+
         for button_name, button_function in menu_buttons.items():
-            # place icon
             if "icon" in button_function:
                 icon = wx.StaticBitmap(self, bitmap=wx.Bitmap(button_function["icon"], wx.BITMAP_TYPE_ICON), pos=(button_x - 10, button_y), size=(64, 64))
-                if button_name == "Post-Install Root Patch":
-                    icon.SetPosition((-1, button_y + 7))
-                if button_name == "Create macOS Installer":
-                    icon.SetPosition((button_x - 5, button_y + 3))
-                if button_name == "Support":
-                    # icon_mac.SetSize((80, 80))
-                    icon.SetPosition((button_x - 7, button_y + 3))
                 if button_name == "Build and Install OpenCore":
                     icon.SetSize((70, 70))
-            if button_name == "⚙️ Settings":
-                button_y += 5
-
+            
             button = wx.Button(self, label=button_name, pos=(button_x + 70, button_y), size=(180, 30))
             button.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
-            button.Bind(wx.EVT_BUTTON, lambda event, function=button_function["function"]: function(event))
-            button_y += 30
-
-            # # Text: Description
-            description_label = wx.StaticText(self, label='\n'.join(button_function["description"]), pos=(button_x + 75, button.GetPosition()[1] + button.GetSize()[1] + 3))
+            button.Bind(wx.EVT_BUTTON, lambda event, f=button_function["function"]: f(event))
+            
+            description_label = wx.StaticText(self, label='\n'.join(button_function["description"]), pos=(button_x + 75, button.GetPosition()[1] + 33))
             description_label.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
-            # button_y += 15
 
-            for i, line in enumerate(button_function["description"]):
-                if line == "":
-                    continue
-                if i == 0:
-                    button_y += 11
-                else:
-                    button_y += 13
-
-            button_y += 25
-
-            if button_name == "Build and Install OpenCore":
-                self.build_button = button
-                if gui_support.CheckProperties(self.constants).host_can_build() is False:
-                    button.Disable()
-            elif button_name == "Post-Install Root Patch":
-                if self.constants.detected_os < os_data.os_data.big_sur:
-                    button.Disable()
-            elif button_name == "⚙️ Settings":
-                button.SetSize((100, -1))
-                button.Centre(wx.HORIZONTAL)
-                description_label.Centre(wx.HORIZONTAL)
-
-            # Always track the furthest point down the window
+            # Maintain spacing
+            row_height = 85
+            button_y += row_height
+            
             if button_y > max_height:
                 max_height = button_y
 
@@ -214,15 +136,27 @@ gemini_desc.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
                 button_x = 320
                 button_y = model_label.GetPosition()[1] + 30
 
+        # --- FOOTER BUTTONS (Settings & Gemini) ---
+        total_footer_width = 120 + 10 + 150 # Buttons + gap
+        start_x = (self.GetSize().width - total_footer_width) // 2
+        footer_y = max_height + 10
 
-        # Text: Copyright
-        copy_label = wx.StaticText(self, label=self.constants.copyright_date, pos=(-1, max_height - 15))
+        settings_btn = wx.Button(self, label="⚙️ Settings", pos=(start_x, footer_y), size=(120, 30))
+        settings_btn.Bind(wx.EVT_BUTTON, self.on_settings)
+
+        gemini_btn = wx.Button(self, label="✨ Ask Gemini", pos=(start_x + 130, footer_y), size=(150, 30))
+        gemini_btn.Bind(wx.EVT_BUTTON, self.on_gemini_help)
+
+        gemini_desc = wx.StaticText(self, label="AI Troubleshooting and\nInstallation help.", pos=(start_x + 135, footer_y + 35))
+        gemini_desc.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
+
+        # --- COPYRIGHT ---
+        copy_label = wx.StaticText(self, label=self.constants.copyright_date, pos=(-1, gemini_desc.GetPosition()[1] + 45))
         copy_label.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
         copy_label.Centre(wx.HORIZONTAL)
 
-        # Set window size
-        self.SetSize((-1, copy_label.GetPosition()[1] + 50))
-
+        # Final Window Size adjustment
+        self.SetSize((-1, copy_label.GetPosition()[1] + 60))
 
     def _preflight_checks(self):
         if (
