@@ -284,58 +284,61 @@ class BuildMiscellaneous:
         """
         USB Handler
         """
-
-        # USB Map
-        usb_map_path = Path(self.constants.plist_folder_path) / Path("AppleUSBMaps/Info.plist")
-        usb_map_tahoe_path = Path(self.constants.plist_folder_path) / Path("AppleUSBMaps/Info-Tahoe.plist")
-        if (
-            usb_map_path.exists()
-            and usb_map_tahoe_path.exists()
-            and (self.constants.allow_oc_everywhere is False or self.constants.allow_native_spoofs is True)
-            and self.model not in ["Xserve2,1", "Dortania1,1"]
-            and (
-                (self.model in model_array.Missing_USB_Map or self.model in model_array.Missing_USB_Map_Ventura)
-                or self.constants.serial_settings in ["Moderate", "Advanced"])
-        ):
-            logging.info("- Adding USB-Map.kext and USB-Map-Tahoe.kext")
-            Path(self.constants.map_kext_folder).mkdir()
-            Path(self.constants.map_kext_folder_tahoe).mkdir()
-            Path(self.constants.map_contents_folder).mkdir()
-            Path(self.constants.map_contents_folder_tahoe).mkdir()
-            shutil.copy(usb_map_path, self.constants.map_contents_folder)
-            # for the tahoe, need to copy but rename to Info.plist
-            shutil.copy(usb_map_tahoe_path, self.constants.map_contents_folder_tahoe / Path("Info.plist"))
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["Enabled"] = True
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map-Tahoe.kext")["Enabled"] = True
-            if self.model in model_array.Missing_USB_Map_Ventura and self.constants.serial_settings not in ["Moderate", "Advanced"]:
-                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["MinKernel"] = "22.0.0"
-
-        # Add UHCI/OHCI drivers
-        # All Penryn Macs lack an internal USB hub to route USB 1.1 devices to the EHCI controller
-        # And MacPro4,1, MacPro5,1 and Xserve3,1 are the only post-Penryn Macs that lack an internal USB hub
-        # - Ref: https://techcommunity.microsoft.com/t5/microsoft-usb-blog/reasons-to-avoid-companion-controllers/ba-p/270710
-        #
-        # To be paired for usb11.py's 'Legacy USB 1.1' patchset
-        #
-        # Note: With macOS 14.1, injection of these kexts causes a panic.
-        #       To avoid this, a MaxKernel is configured with XNU 23.0.0 (macOS 14.0).
-        #       Additionally sys_patch.py stack will now patches the bins onto disk for 14.1+.
-        #       Reason for keeping the dual logic is due to potential conflicts of in-cache vs injection if we start
-        #       patching pre-14.1 hosts.
-        if (
-            smbios_data.smbios_dictionary[self.model]["CPU Generation"] <= cpu_data.CPUGen.penryn.value or \
-            self.model in ["MacPro4,1", "MacPro5,1", "Xserve3,1"]
-        ):
-            logging.info("- Adding UHCI/OHCI USB support")
-            shutil.copy(self.constants.apple_usb_11_injector_path, self.constants.kexts_path)
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBOHCI.kext")["Enabled"] = True
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBOHCIPCI.kext")["Enabled"] = True
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBUHCI.kext")["Enabled"] = True
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBUHCIPCI.kext")["Enabled"] = True
-
-            # Also remove MaxKernel from the USB-Map.kext, as USB stack will be downgraded after root patching
-            support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["MaxKernel"] = ""
-
+        
+        if self.model not in ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "MacBookPro16,3"]:
+            logging.info("Your Mac is not affected by Unsupported Mantissa speed kernel panics, so we continue with USB port mapping.")
+            # USB Map
+            usb_map_path = Path(self.constants.plist_folder_path) / Path("AppleUSBMaps/Info.plist")
+            usb_map_tahoe_path = Path(self.constants.plist_folder_path) / Path("AppleUSBMaps/Info-Tahoe.plist")
+            if (
+                usb_map_path.exists()
+                and usb_map_tahoe_path.exists()
+                and (self.constants.allow_oc_everywhere is False or self.constants.allow_native_spoofs is True)
+                and self.model not in ["Xserve2,1", "Dortania1,1"]
+                and (
+                    (self.model in model_array.Missing_USB_Map or self.model in model_array.Missing_USB_Map_Ventura)
+                    or self.constants.serial_settings in ["Moderate", "Advanced"])
+            ):
+                logging.info("- Adding USB-Map.kext and USB-Map-Tahoe.kext")
+                Path(self.constants.map_kext_folder).mkdir()
+                Path(self.constants.map_kext_folder_tahoe).mkdir()
+                Path(self.constants.map_contents_folder).mkdir()
+                Path(self.constants.map_contents_folder_tahoe).mkdir()
+                shutil.copy(usb_map_path, self.constants.map_contents_folder)
+                # for the tahoe, need to copy but rename to Info.plist
+                shutil.copy(usb_map_tahoe_path, self.constants.map_contents_folder_tahoe / Path("Info.plist"))
+                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["Enabled"] = True
+                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map-Tahoe.kext")["Enabled"] = True
+                if self.model in model_array.Missing_USB_Map_Ventura and self.constants.serial_settings not in ["Moderate", "Advanced"]:
+                    support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["MinKernel"] = "22.0.0"
+    
+            # Add UHCI/OHCI drivers
+            # All Penryn Macs lack an internal USB hub to route USB 1.1 devices to the EHCI controller
+            # And MacPro4,1, MacPro5,1 and Xserve3,1 are the only post-Penryn Macs that lack an internal USB hub
+            # - Ref: https://techcommunity.microsoft.com/t5/microsoft-usb-blog/reasons-to-avoid-companion-controllers/ba-p/270710
+            #
+            # To be paired for usb11.py's 'Legacy USB 1.1' patchset
+            #
+            # Note: With macOS 14.1, injection of these kexts causes a panic.
+            #       To avoid this, a MaxKernel is configured with XNU 23.0.0 (macOS 14.0).
+            #       Additionally sys_patch.py stack will now patches the bins onto disk for 14.1+.
+            #       Reason for keeping the dual logic is due to potential conflicts of in-cache vs injection if we start
+            #       patching pre-14.1 hosts.
+            if (
+                smbios_data.smbios_dictionary[self.model]["CPU Generation"] <= cpu_data.CPUGen.penryn.value or \
+                self.model in ["MacPro4,1", "MacPro5,1", "Xserve3,1"]
+            ):
+                logging.info("- Adding UHCI/OHCI USB support")
+                shutil.copy(self.constants.apple_usb_11_injector_path, self.constants.kexts_path)
+                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBOHCI.kext")["Enabled"] = True
+                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBOHCIPCI.kext")["Enabled"] = True
+                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBUHCI.kext")["Enabled"] = True
+                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB1.1-Injector.kext/Contents/PlugIns/AppleUSBUHCIPCI.kext")["Enabled"] = True
+    
+                # Also remove MaxKernel from the USB-Map.kext, as USB stack will be downgraded after root patching
+                support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map.kext")["MaxKernel"] = ""
+        else:
+            logging.info("Your Mac is affected by Unsupported Mantissa speed kernel panics. Skipping USB port mapping.")                
 
     def _debug_handling(self) -> None:
         """
@@ -486,9 +489,8 @@ class BuildMiscellaneous:
                     logging.info("We found USB-Map-Tahoe.kext. Disabling...")
                     support.BuildSupport(self.model, self.constants, self.config).get_kext_by_bundle_path("USB-Map-Tahoe.kext")["Enabled"] = False
                 else:
-                    logging.error("We couldn't find USB-Map.kext, nor USB-Map-Tahoe.kext because of the following error:")
-                    logging.exception("Stack Trace:") # This prints the full technical error
-                    logging.info("Skipping disable...")
+                    logging.info("This is an extra check to make sure that no USB port mapping is injected onto Macs affected by Unsupported Mantissa speed panics.")
+                    logging.info("No USB-Map.kext or USB-Tahoe.kext is found. Continuing onto the next step...")
             except Exception as E:
                 logging.error("We have some troubles disabling USB-Map.kext and USB-Map-Tahoe.kext. It may be because the file is missing or the syntax is invalid. The error is the following:")
                 logging.exception("Stack Trace:") # This prints the full technical error
