@@ -302,7 +302,7 @@ class InstallOCFrame(wx.Frame):
                     self.Destroy()
                 return
 
-           elif not self.constants.custom_model:
+            elif not self.constants.custom_model:
                 model_identifier = device_probe.SystemProperties().model
                 if model_identifier in ["MacBookAir8,1", "MacBookAir8,2", "MacBookAir9,1", "Macmini8,1", "iMacPro1,1", "MacBookPro15,2", "MacBookPro15,1", "MacBookPro15,3", "MacBookPro15,4", "MacBookPro16,3"]:
                     gui_support.RestartHost(self).restart(message="OpenCore has finished installing to disk.\n\nYou will need to restart. Once the screen becomes black, prepare your fingers to press command-R.\n\n When you hear the chime, press and hold command-R until you boot into macOS Recovery. \n\n Once done, go to Utilities > Startup Security Utility. Then set Secure Boot to No Security and \n\n then set up Allowed boot media to Allow startup from external bootable media. Then, close out of this window and go to Utilities > Terminal. \n\n Then, type csrutil disable && csrutil authenticated-boot disable. Then hit enter. \n\n Then restart your Mac and hold the option key and select OpenCore/Boot's EFI. \n\n Would you like to reboot?")
