@@ -6,6 +6,7 @@ import wx
 import logging
 import threading
 import traceback
+import webbrowser
 
 from .. import constants
 
