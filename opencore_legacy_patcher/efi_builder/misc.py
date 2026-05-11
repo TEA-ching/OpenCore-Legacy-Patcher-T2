@@ -538,7 +538,7 @@ class BuildMiscellaneous:
 
         # T2 Support: Enable disk access (AMFI bypass), graphics fixes, and boot delay
         logging.info("- Adding T2-specific boot arguments for macOS 15/26")
-        self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -v rddelay=5 amfi=0x80 igfxfw=2 igfxonln=1 revpatch=sbvmm vmmroot=1 -disable_ext_panics -no_compat_check"
+        self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += " -v rddelay=5 amfi=0x80 igfxfw=2 igfxonln=1 revpatch=sbvmm -disable_ext_panics -no_compat_check"
         # Target the Delete section
         try:
             if "7C436110-AB2A-4BBB-A880-FE41995C9F82" not in self.config["NVRAM"]["Delete"]:
