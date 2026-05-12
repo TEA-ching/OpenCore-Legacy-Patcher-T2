@@ -160,6 +160,10 @@ class MainFrame(wx.Frame):
 
     def _preflight_checks(self):
         try:
+            # 1. HEAL THE CONFIG: If no build model is set, set it to the current Mac
+            if self.constants.computer.build_model is None:
+                print(f"DEBUG: Build model was None. Auto-setting to {self.constants.computer.real_model}")
+                self.constants.computer.build_model = self.constants.computer.real_model
             # Clean strings and diagnostic print
             real_model = str(self.constants.computer.real_model).strip()
             build_model = str(self.constants.computer.build_model).strip() if self.constants.computer.build_model else None
