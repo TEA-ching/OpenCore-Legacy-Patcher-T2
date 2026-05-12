@@ -206,18 +206,15 @@ objc.loadBundleVariables(IOKit_bundle, globals(), variables)  # type: ignore # p
 
 
 def ioiterator_to_list(iterator: io_iterator_t):
-    # items = []
-    item = IOIteratorNext(iterator)  # noqa: F821
+    item = IOIteratorNext(iterator)
     while item:
-        # items.append(next)
         yield item
-        item = IOIteratorNext(iterator)  # noqa: F821
-    IOObjectRelease(iterator)  # noqa: F821
-    # return items
+        item = IOIteratorNext(iterator)
+    IOObjectRelease(iterator)
 
 
 def corefoundation_to_native(collection):
-    if collection is None:  # nullptr
+    if collection is None:
         return None
     native = Conversion.pythonCollectionFromPropertyList(collection)
     CFRelease(collection)
@@ -236,7 +233,6 @@ def get_class_inheritance(io_object):
     classes = []
     cls = IOObjectCopyClass(io_object)
     while cls:
-        # yield cls
         classes.append(cls)
         CFRelease(cls)
         cls = IOObjectCopySuperclassForClass(cls)
