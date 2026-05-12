@@ -166,20 +166,20 @@ class MainFrame(wx.Frame):
             
             print(f"DEBUG: Real: '{real_model}' | Build: '{build_model}'")
             
-              if (
-                self.constants.computer.build_model != None and
-                self.constants.computer.build_model != self.constants.computer.real_model and
-                self.constants.host_is_hackintosh is False
-                ):
-                pop_up = wx.MessageDialog(
-                    self,
-                    f"Unsupported Configuration Detected!\nHost: {real_model}\nBuild: {build_model}",
-                    "Mismatch Detected",
-                    style=wx.OK | wx.ICON_EXCLAMATION
-                )
-                pop_up.ShowModal()
-                self.on_build_and_install()
-                return
+          if (
+            self.constants.computer.build_model != None and
+            self.constants.computer.build_model != self.constants.computer.real_model and
+            self.constants.host_is_hackintosh is False
+            ):
+            pop_up = wx.MessageDialog(
+                self,
+                f"Unsupported Configuration Detected!\nHost: {real_model}\nBuild: {build_model}",
+                "Mismatch Detected",
+                style=wx.OK | wx.ICON_EXCLAMATION
+            )
+            pop_up.ShowModal()
+            self.on_build_and_install()
+            return
                 
         except Exception as e:
             print(f"DEBUG: Preflight error: {e}")
