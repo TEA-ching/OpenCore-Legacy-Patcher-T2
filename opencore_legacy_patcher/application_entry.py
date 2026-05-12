@@ -114,6 +114,9 @@ class OpenCoreLegacyPatcher:
 
         # Generate defaults
         defaults.GenerateDefaults(self.computer.real_model, True, self.constants)
+        if self.constants.computer.build_model is None:
+            logging.info(f"Initializing build_model to native host: {self.computer.real_model}")
+            self.constants.computer.build_model = self.computer.real_model
         threading.Thread(target=analytics_handler.Analytics(self.constants).send_analytics).start()
 
         if utilities.check_cli_args() is None:
