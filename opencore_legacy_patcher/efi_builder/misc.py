@@ -7,6 +7,7 @@ import logging
 import binascii
 import sys
 import os
+import plistb
 
 from pathlib import Path
 
@@ -596,4 +597,33 @@ class BuildMiscellaneous:
             logging.exception("Stack Trace:") # This prints the full technical error
             logging.info("Please try again later.")
             sys.exit(3)
+        
+        
+        # Path to your OpenCore config
+        config_path = '/Volumes/EFI/OC/config.plist'
+        
+        if os.path.exists(config_path):
+            with open(config_path, 'rb') as fp:
+                config = plistlib.load(fp)
+        
+            # Enable the ReleaseUsbOwnership quirk
+            try:
+                config['UEFI']['Quirks']['ReleaseUsbOwnership'] = True
+                logging.info("Success: ReleaseUsbOwnership set to True.")
+                
+                # Write the updated config back
+                with open(config_path, 'wb') as fp:
+                    plistlib.dump(config, fp, fmt=plistlib.FMT_XML)
+                    
+            except KeyError as e:
+                logging.error(f"Error: Could not find the specified path in plist: {e}")
+                logging.exception("Stack Trace:") # This prints the full technical error
+                logging.info("Please try again later.")
+                sys.exit(3)
+        else:
+            logging.error(f"Error: Could not find the specified path in plist: {e}")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
+        
         
