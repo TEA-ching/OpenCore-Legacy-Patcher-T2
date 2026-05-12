@@ -1100,10 +1100,15 @@ Hardware Information:
 
         self._update_setting(self.settings[self._find_parent_for_key(label)][label]["variable"], value)
         if label == "Allow native models":
-            if gui_support.CheckProperties(self.constants).host_can_build() is True:
-                self.parent.build_button.Enable()
-            else:
-                self.parent.build_button.Disable()
+            # Safety check: does the button actually exist?
+            if hasattr(self.parent, 'build_button') and self.parent.build_button:
+                if gui_support.CheckProperties(self.constants).host_can_build() is True:
+                    self.parent.build_button.Enable()
+                else:
+                    self.parent.build_button.Disable()
+            
+            # FORCE the internal constant to update regardless of the GUI button
+            self.constants.allow_native_models = value
 
 
     def on_spinctrl(self, event: wx.Event, label: str) -> None:
