@@ -149,8 +149,6 @@ class CheckProperties:
             return True
         if self.constants.computer.real_model in model_array.SupportedSMBIOS:
             return True
-        if self.constants.computer.real_model == "MacBookPro16,2":
-            return False
 
         return False
 
