@@ -7,6 +7,7 @@ import logging
 import threading
 import traceback
 import webbrowser
+import wx.html2
 
 from .. import constants
 
@@ -18,7 +19,19 @@ from ..wx_gui import (
     gui_support,
     gui_sys_patch_display
 )
+class GeminiWebView(wx.Frame):
+    def __init__(self, parent, title, url="https://gemini.google.com"):
+        super().__init__(parent, title=title, size=(1000, 700))
+        
+        # Create the WebView
+        self.browser = wx.html2.WebView.New(self)
+        self.browser.LoadURL(url)
+        
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        self.Centre()
 
+    def OnClose(self, event):
+        self.Destroy()
 
 class InstallOCFrame(wx.Frame):
     """
@@ -319,6 +332,29 @@ class InstallOCFrame(wx.Frame):
         else:
             if self.constants.update_stage != gui_support.AutoUpdateStages.INACTIVE:
                 self.constants.update_stage = gui_support.AutoUpdateStages.FINISHED
+            # Setup the Error Dialog
+            error_msg = "OpenCore installation failed.\n\nWould you like to report this issue or ask Gemini for help?"
+            help_dialog = wx.RichMessageDialog(
+                self, 
+                error_msg, 
+                "Installation Error", 
+                wx.OK | wx.CANCEL | wx.AUX1_BUTTON | wx.ICON_ERROR
+            )
+            
+            # Map buttons: OK -> Report, Cancel -> Close, Aux -> Gemini
+            help_dialog.SetOKCancelLabels("Report Issue", "Close")
+            help_dialog.SetAuxiliaryLabel("Ask Gemini")
+
+            response = help_dialog.ShowModal()
+
+            if response == wx.ID_OK:
+                # Open GitHub in system browser
+                webbrowser.open("https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")
+            
+            elif response == wx.ID_AUX1:
+                # Open Gemini in the internal WebView
+                gemini_window = GeminiWebView(self, title="Gemini AI Assistant")
+                gemini_window.Show()
 
 
     def _install_oc(self, partition: dict) -> None:
