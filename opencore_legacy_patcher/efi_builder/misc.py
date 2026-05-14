@@ -17,7 +17,6 @@ from .. import constants
 
 from ..support import generate_smbios
 from ..detections import device_probe
-from . import t2smbiossecurity
 
 from ..datasets import (
     model_array,
@@ -612,23 +611,3 @@ class BuildMiscellaneous:
             logging.exception("Stack Trace:") # This prints the full technical error
             logging.info("Please try again later.")
             sys.exit(3)
-        try:
-            logging.info("Adding Booter Quirks patches for T2 Macs")
-            self.run_sequence()
-        except Exception as e:
-            logging.error("We have issues calling the ref_sequence function due to the following error:")
-            logging.exception("Stack Trace:") # This prints the full technical error
-            logging.info("Please try again later.")
-            sys.exit(3)
-    
-    def run_sequence(self):
-        # 1. Run misc.py
-        print("Starting misc.py...")
-        result = subprocess.run([sys.executable, "misc.py"])
-    
-        # 2. Check if it finished successfully (exit code 0)
-        if result.returncode == 0:
-            print("misc.py finished successfully. Starting t2smbiossecurity.py...")
-            subprocess.run([sys.executable, "t2smbiossecurity.py"])
-        else:
-            print(f"misc.py failed with exit code {result.returncode}. Aborting.")
