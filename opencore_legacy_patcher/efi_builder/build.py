@@ -148,7 +148,7 @@ class BuildOpenCore:
                 logging.info("- Setting PanicNoKextDump to True for T2 Macs")
                 self.config["Kernel"]["Quirks"]["PanicNoKextDump"] = True
 
-               if self.model = "MacBookPro15,1":
+               if self.model != "Macmini8,1" or "iMacPro1,1":
                     ssdt_file = "SSDT-T2-FAKE.aml"
                     ssdt_src = self.constants.payload_path / "ACPI" / ssdt_file
                     if ssdt_src.exists():
