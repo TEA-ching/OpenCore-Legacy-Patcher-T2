@@ -597,6 +597,25 @@ class BuildMiscellaneous:
             logging.exception("Stack Trace:")
             logging.info("Aborting...")
             sys.exit(3)
+        try:
+            logging.info("- Disabling Library Validation")
+            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement"
+            )["Enabled"] = True
+        except Exception as e:
+            logging.error("Disabling Library Validation Enforcement due to the following error:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
+        try:
+            logging.info("- Set SIP to 0x803")
+            APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
+            self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
+        except Exception as e:
+            logging.error("Setting SIP to 0x803 failed due to the following error:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
 
         
         # After ~20 SEP mailbox timeouts AppleSEPManagerIntel panics.
