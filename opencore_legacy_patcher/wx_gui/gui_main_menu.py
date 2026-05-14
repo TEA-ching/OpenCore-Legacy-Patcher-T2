@@ -11,6 +11,7 @@ import requests
 import markdown2
 import threading
 import webbrowser
+from packaging import version
 
 from .. import constants
 
@@ -227,32 +228,51 @@ class MainFrame(wx.Frame):
     def _check_for_updates(self):
         if self.constants.has_checked_updates is True:
             return
-
+    
         ignore_updates = global_settings.GlobalEnviromentSettings().read_property("IgnoreAppUpdates")
         if ignore_updates is True:
             self.constants.ignore_updates = True
             return
-
+    
         self.constants.ignore_updates = False
         self.constants.has_checked_updates = True
-        dict = updates.CheckBinaryUpdates(self.constants).check_binary_updates()
-        if not dict:
+        
+        # 1. Fetch update info
+        update_dict = updates.CheckBinaryUpdates(self.constants).check_binary_updates()
+        if not update_dict:
             return
-
-        version = dict["Version"]
-        logging.info(f"New version: {version}")
-
-        wx.CallAfter(self.on_update, dict["Link"], version, dict["Github Link"])
-
-    def on_build_and_install(self, event: wx.Event = None):
-        self.Hide()
-        gui_build.BuildFrame(
-            parent=None,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
-        self.Destroy()
+    
+        remote_version_str = update_dict["Version"]
+        local_version_str = self.constants.patcher_version
+    
+        try:
+            # 2. Robust Comparison
+            remote_v = version.parse(remote_version_str)
+            local_v = version.parse(local_version_str)
+    
+            # Only trigger if remote is NEWER. 
+            # If remote <= local, we are already up to date or ahead.
+            if remote_v <= local_v:
+                logging.info(f"OCLP-T2 is up to date. (Local: {local_v} >= Remote: {remote_v})")
+                return
+    
+        except version.InvalidVersion:
+            # Fallback for non-standard strings: only prompt if they are not identical
+            if remote_version_str == local_version_str:
+                return
+    
+        # 3. Trigger update
+        logging.info(f"Newer version detected: {remote_version_str}")
+        wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"])
+        def on_build_and_install(self, event: wx.Event = None):
+            self.Hide()
+            gui_build.BuildFrame(
+                parent=None,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+            self.Destroy()
 
 
     def on_post_install_root_patch(self, event: wx.Event = None):
