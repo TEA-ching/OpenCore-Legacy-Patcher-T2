@@ -19,3 +19,6 @@ We strongly encourage using **Private Vulnerability Reporting** to disclose secu
 
 ### Out-of-Scope Reports:
 **Do not** report disabling SIP (System Integrity Protection) or AMFI (Apple Mobile File Integrity) as vulnerabilities. These are necessary components for bypassing minimum system requirements and will be dismissed.
+
+Note:
+If it is a fork of this project, then enabling the Report a vulnerability button is up to the maintainer of the fork. In case they don't enable this button, open an Issue with a [Vulnerability] tag.
