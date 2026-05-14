@@ -572,24 +572,32 @@ class BuildMiscellaneous:
             logging.info("Please try again later.")
             sys.exit(3)
         try:
-            logging.info("- Disabling Library Validation")
-            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
-                self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement"
-            )["Enabled"] = True
+            logging.info("Injecting AppleIntelUSBXHC event timeout patches for Tahoe...")
+            
+            # Define and append the XHCI Event Timeout Patch
+            # This prevents the "did not generate on event" panic by increasing the 
+            # hardware response wait time.
+            xhci_timeout_patch = {
+                "Arch": "x86_64",
+                "Comment": "Increase AppleIntelUSBXHC event timeout",
+                "Enabled": True,
+                "Identifier": "com.apple.driver.appleusbxhci",
+                # Find: 41 83 FC 0A (CMP R12D, 10)
+                "Find": b"\x41\x83\xFC\x0A",
+                # Replace: 41 83 FC FF (CMP R12D, 255)
+                "Replace": b"\x41\x83\xFC\xFF",
+                "MinKernel": "25.0.0" # Target macOS 26 (Tahoe) and above
+            }
+            
+            self.config["Kernel"]["Patch"].append(xhci_timeout_patch)
+            logging.info("  - Successfully added AppleIntelUSBXHC timeout patch.")
+        
         except Exception as e:
-            logging.error("Disabling Library Validation Enforcement due to the following error:")
-            logging.exception("Stack Trace:") # This prints the full technical error
-            logging.info("Please try again later.")
+            logging.error("Failed to inject AppleIntelUSBXHC timeout patches. Error details:")
+            logging.exception("Stack Trace:")
+            logging.info("Aborting...")
             sys.exit(3)
-        try:
-            logging.info("- Set SIP to 0x803")
-            APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
-            self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
-        except Exception as e:
-            logging.error("Setting SIP to 0x803 failed due to the following error:")
-            logging.exception("Stack Trace:") # This prints the full technical error
-            logging.info("Please try again later.")
-            sys.exit(3)
+
         
         # After ~20 SEP mailbox timeouts AppleSEPManagerIntel panics.
         # Patch converts the panic call to an early return.
