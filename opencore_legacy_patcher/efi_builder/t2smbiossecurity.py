@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 
 # Update this path if you are running it on a USB or different mount point
 config_path = '/Volumes/EFI/EFI/OC/config.plist'
