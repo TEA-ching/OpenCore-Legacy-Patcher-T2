@@ -58,23 +58,3 @@ class T2TahoePatcher:
         # 3. NVRAM - Safe Token Injection
         APPLE_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
         self._update_nvram_string(APPLE_UUID, "boot-args", "amfi=0x80 ipc_control_port_options=0")
-
----
-
-### Key Improvements Explained
-
-#### 1. Nested Path Safety
-In your first script, `config['Booter']['Quirks']` would crash if the `Booter` key was missing. The `_set_nested_value` function (copied from `security.py`) acts like `mkdir -p`. It creates the folders (dictionaries) only if they don't exist, preventing `KeyError`.
-
-#### 2. Token-Based NVRAM Merging
-Simply adding strings like `current + " amfi=0x80"` is dangerous because you might end up with `amfi=0x80 amfi=0x80` if the script runs twice.
-*   **The New Way:** It splits the string into a `set()` of tokens. If `amfi=0x80` is already there, it won't add it again. It’s **idempotent** (safe to run multiple times).
-
-#### 3. Separation of Concerns
-By using a **Class**, you separate the *loading/saving* logic from the *patching* logic. This makes the code easier to test and mirror the structure used in professional tools like OpenCore Legacy Patcher.
-
-#### 4. Hex Data Handling
-If you need to add things like `csr-active-config`, you can now use the `binascii` pattern from `security.py`:
-```python
-# To add SIP disabling (03080000)
-self._set_nested_value("NVRAM.Add.7C436110-AB2A-4BBB-A880-FE41995C9F82.csr-active-config", binascii.unhexlify("03080000"))
