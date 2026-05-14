@@ -1,6 +1,7 @@
 import os
 import plistlib
 import logging
+import sys
 
 # Set up logging for standalone runs
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
