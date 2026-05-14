@@ -11,7 +11,9 @@ try:
     logging.info("Trying to call the definition finalize_t2_tahoe")
     finalize_t2_tahoe(path)
 except Exception as e:
-    logging.error(f"Couldn't call the function. Aborting...")
+    logging.error("We couldn't call finalize_t2_tahoe function due to the following error:")
+    logging.exception("Stack Trace:") # This prints the full technical error
+    logging.info("Please try again later.")
     sys.exit(3)
 
 def finalize_t2_tahoe(path):
