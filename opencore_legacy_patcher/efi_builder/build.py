@@ -128,7 +128,7 @@ class BuildOpenCore:
                 # Ensure T2 SMBIOS masking is created and not merged with hardware values
                 if "PlatformInfo" not in self.config:
                     self.config["PlatformInfo"] = {}
-                self.config["PlatformInfo"]["UpdateSMBIOSMode"] = "Create"
+                self.config["PlatformInfo"]["UpdateSMBIOSMode"] = "Custom"
                 self.config["PlatformInfo"]["CustomSMBIOSGuid"] = True
                 self.config["PlatformInfo"]["UpdateSMBIOS"] = True
                 self.config["PlatformInfo"]["UpdateDataHub"] = True
