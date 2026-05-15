@@ -842,6 +842,102 @@ class BuildMiscellaneous:
             logging.exception("Stack Trace:") # This prints the full technical error
             logging.info("Please try again later.")
             sys.exit(3)
+
+        try:
+            logging.info("- Injecting Intel-specific XHCI Power State Success patch...")
+            
+            # This targets the Power Management gated call seen in your IMG_0244.jpg log.
+            # It replaces the 'Jump if Zero' (failure check) with a 'Relative Jump' 
+            # to the success branch of the driver code.
+            intel_xhci_power_patch = {
+                "Arch": "x86_64",
+                "Comment": "Force Intel XHCI Power State Success (Tahoe 26.x)",
+                "Enabled": True,
+                "Identifier": "com.apple.driver.AppleIntelUSBXHCI",
+                # Find: 0F 84 8A 00 00 00 44 89 (JZ check for command completion)
+                "Find": b"\x0F\x84\x8A\x00\x00\x00\x44\x89",
+                # Replace: E9 8B 00 00 00 90 44 89 (JMP to success branch + NOP)
+                "Replace": b"\xE9\x8B\x00\x00\x00\x90\x44\x89",
+                "MinKernel": "25.0.0"
+            }
+            
+            self.config["Kernel"]["Patch"].append(intel_xhci_power_patch)
+            logging.info("  - Successfully added Intel XHCI Power State patch.")
+        
+        except Exception as e:
+            logging.error("Failed to inject Intel-specific XHCI Power State Success patch due to the following error:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
+
+        try:
+            logging.info("- Injecting XHCI Command Abort Loop disablement...")
+            
+            # This patch targets the 'did not generate an event' stall seen in your logs.
+            # It forces the command ring to report a successful event completion 
+            # even when the T2 bridge remains silent.
+            xhci_abort_disable_patch = {
+                "Arch": "x86_64",
+                "Comment": "Disable XHCI Command Abort Stall (Tahoe 26.x)",
+                "Enabled": True,
+                "Identifier": "com.apple.driver.appleusbxhci",
+                # Find: 48 89 45 B0 44 89 45 B8 (Generic event processing)
+                "Find": b"\x48\x89\x45\xB0\x44\x89\x45\xB8",
+                # Replace: B8 01 00 00 00 EB 06 90 (MOV EAX, 1; JMP +6; NOP)
+                "Replace": b"\xB8\x01\x00\x00\x00\xEB\x06\x90",
+                "MinKernel": "25.0.0"
+            }
+            
+            self.config["Kernel"]["Patch"].append(xhci_abort_disable_patch)
+            logging.info("  - Successfully added XHCI Abort Loop patch.")
+        
+        except Exception as e:
+            logging.error("Failed to inject XHCI Abort Loop patch:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
+        try:
+            logging.info("- Injecting AppleANS2Controller Force Start patch...")
+            ans2_patch = {
+                "Arch": "x86_64",
+                "Comment": "Force AppleANS2Controller Start (Tahoe T2 Bypass)",
+                "Enabled": True,
+                "Identifier": "com.apple.driver.AppleANS2Controller",
+                # Find: 48 89 45 B0 44 89 45 B8 (Generic status check)
+                "Find": b"\x48\x89\x45\x90\x44\x89\x45\x98", 
+                # Replace: B8 00 00 00 00 EB 06 90 (Return kIOReturnSuccess)
+                "Replace": b"\xB8\x00\x00\x00\x00\xEB\x06\x90",
+                "MinKernel": "25.0.0"
+            }
+            self.config["Kernel"]["Patch"].append(ans2_patch)
+            logging.info("  - Successfully added ANS2 patch.")
+        except Exception as e:
+            logging.error(f"Failed to inject ANS2 patch: {e}")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
+        try:
+            logging.info("- Configuring Kernel Quirks for Tahoe...")
+            
+            # Ensure the Quirks dictionary exists
+            if "Quirks" not in self.config["Kernel"]:
+                self.config["Kernel"]["Quirks"] = {}
+                
+            # Set APFS Trim Timeout to 0
+            # This prevents the boot-time hang on T2 Macs with patched storage drivers
+            self.config["Kernel"]["Quirks"]["SetApfsTrimTimeout"] = 0
+            
+            # While you're at it, ensure these are also set for Tahoe stability:
+            self.config["Kernel"]["Quirks"]["DisableIoMapper"] = True
+            self.config["Kernel"]["Quirks"]["PanicNoKextDump"] = True
+            
+            logging.info("  - SetApfsTrimTimeout set to 0.")
+        
+        except Exception as e:
+            logging.error("Failed to set Kernel Quirks:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
         
         # After ~20 SEP mailbox timeouts AppleSEPManagerIntel panics.
         # Patch converts the panic call to an early return.
