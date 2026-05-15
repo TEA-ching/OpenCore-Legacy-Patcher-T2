@@ -769,6 +769,53 @@ class BuildMiscellaneous:
             logging.info("Please try again later.")
             sys.exit(3)
 
+        try:
+            logging.info("- Injecting bridgeOS spoofing variables for Tahoe")
+            apple_guid = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
+        
+            if apple_guid not in self.config["NVRAM"]["Add"]:
+                self.config["NVRAM"]["Add"][apple_guid] = {}
+        
+            # Spoof the BridgeOS version to Tahoe 26.x
+            # The format must be a byte string (Data type in plist)
+            self.config["NVRAM"]["Add"][apple_guid]["bridge-os-version"] = b"26.16.1047.0.0,0"
+            
+            # Ensure t2-bridge-status is also present
+            self.config["NVRAM"]["Add"][apple_guid]["t2-bridge-status"] = b"\x01"
+        
+            # Add to Delete section to force the update over existing NVRAM values
+            if apple_guid not in self.config["NVRAM"]["Delete"]:
+                self.config["NVRAM"]["Delete"][apple_guid] = []
+            
+            for key in ["bridge-os-version", "t2-bridge-status"]:
+                if key not in self.config["NVRAM"]["Delete"][apple_guid]:
+                    self.config["NVRAM"]["Delete"][apple_guid].append(key)
+        
+        except Exception as e:
+            logging.error("Failed to inject bridgeOS spoofing")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
+
+        try:
+            logging.info("- Setting ApECID to 0 (Disabling Personalized Boot)")
+            
+            # Ensure the Security dictionary exists
+            if "Security" not in self.config["Misc"]:
+                self.config["Misc"]["Security"] = {}
+                
+            # ApECID must be an Integer (0)
+            self.config["Misc"]["Security"]["ApECID"] = 0
+            
+            # While we are here, ensure SecureBootModel is also disabled
+            # This is a prerequisite for ApECID 0 to work
+            self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
+            
+        except Exception as e:
+            logging.error("Failed to set ApECID/SecureBootModel")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
         
         # After ~20 SEP mailbox timeouts AppleSEPManagerIntel panics.
         # Patch converts the panic call to an early return.
