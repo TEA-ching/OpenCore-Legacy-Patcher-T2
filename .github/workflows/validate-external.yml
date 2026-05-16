@@ -14,7 +14,7 @@ permissions:
 jobs:
   build:
     name: Validate
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     if: github.repository_owner != 'dortania'
 
     steps:
