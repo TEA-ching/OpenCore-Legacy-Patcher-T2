@@ -110,6 +110,7 @@ class BuildOpenCore:
             self.constants.set_vmm_cpuid = False
 
         if "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
+            try:
                 logging.info("- Adding T2-specific bypass NVRAM variables")
             
                 # Append T2-specific boot args to the existing boot-args string
