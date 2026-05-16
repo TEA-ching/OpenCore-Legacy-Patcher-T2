@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     name: Validate
-    runs-on: x86_64_tahoe
+    runs-on: x86_64_sequoia
     if: github.repository_owner == 'dortania'
     steps:
       - uses: actions/checkout@v6
