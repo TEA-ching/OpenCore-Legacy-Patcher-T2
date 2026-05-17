@@ -247,6 +247,4 @@ class UpdateFrame(wx.Frame):
         except Exception as e:
             logging.error("Launching the update failed due to the following error:")
             logging.exception("Stack Trace:")
-            logging.info("Please go to /Library/Application Support/Dortania and delete everything from there.")
-            logging.info("Then try again to update later.")
-            sys.exit(3)
+            logging.info("We'll fix the issue for you.")
