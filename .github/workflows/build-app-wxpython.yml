@@ -15,7 +15,7 @@ on:
 jobs:
   build:
     name: Build wxPython
-    runs-on: macos-13-intel
+    runs-on: macos-15-intel
     timeout-minutes: 120
     permissions:
       contents: write
@@ -95,17 +95,38 @@ jobs:
           name: OpenCore-Patcher-Uninstaller.pkg
           path: ./dist/OpenCore-Patcher-Uninstaller.pkg
 
+      - name: Compute preview release name from upstream tags
+        if: github.event_name == 'push'
+        run: |
+          LATEST_ORIGIN_TAG=$(git ls-remote --tags https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2.git \
+            | awk '{print $2}' \
+            | sed 's#refs/tags/##' \
+            | sed 's/\^{}$//' \
+            | grep -E '[0-9]{2}$' \
+            | sort -V \
+            | tail -n1)
+          LATEST_SUFFIX=$(printf '%s' "$LATEST_ORIGIN_TAG" | grep -Eo '[0-9]{2}$' || echo '00')
+          NEXT_SUFFIX=$((10#$LATEST_SUFFIX + 1))
+          DATE_ISO=$(date -u +%Y%m%d)
+          RELEASE_NAME="4.0.0 alpha ${NEXT_SUFFIX}-${DATE_ISO}"
+          RELEASE_TAG=$(printf '%s' "$RELEASE_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_ENV
+          echo "release_tag=$RELEASE_TAG" >> $GITHUB_ENV
+
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ github.event_name == 'push' && env.release_tag || github.ref_name }}
+          name: ${{ github.event_name == 'push' && env.release_name || github.ref_name }}
+          prerelease: ${{ github.event_name == 'push' }}
           files: |
             ./dist/AutoPkg-Assets.pkg
             ./dist/OpenCore-Patcher.pkg
             ./dist/OpenCore-Patcher-Uninstaller.pkg
           generate_release_notes: false
           body: |
-            ## OpenCore Legacy Patcher ${{ github.ref_name }}
+            ## OpenCore Legacy Patcher ${{ github.event_name == 'push' && env.release_name || github.ref_name }}
 
             ### Changes
             - Added T2 Mac support

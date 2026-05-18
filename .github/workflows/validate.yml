@@ -14,7 +14,7 @@ on:
 jobs:
   build:
     name: Validate
-    runs-on: x86_64_monterey
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v6
       - name: Validate
