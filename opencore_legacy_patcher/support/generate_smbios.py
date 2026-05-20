@@ -44,7 +44,7 @@ def set_smbios_model_spoof(model):
         if model.startswith("MacPro") or model.startswith("Xserve"):
             return "MacPro7,1"
         elif model.startswith("Macmini"):
-            return "Macmini8,1"
+            return "iMac20,1"
         elif model.startswith("iMac"):
             if smbios_data.smbios_dictionary[model]["Max OS Supported"] <= os_data.os_data.high_sierra:
                 # Models dropped in Mojave either do not have an iGPU, or should have them disabled
