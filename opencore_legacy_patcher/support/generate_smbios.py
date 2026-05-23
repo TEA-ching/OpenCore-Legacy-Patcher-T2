@@ -46,8 +46,6 @@ def set_smbios_model_spoof(model):
                 # iMac20,1 / iMac20,2 are the 2020 Intel iMacs still supported in Tahoe
                 return "iMac20,1"
         else:
-            raise Exception(f"Unknown SMBIOS for spoofing: {model}")
-        else:
             # Unknown Model
             raise Exception(f"Unknown SMBIOS for spoofing: {model}")
 
