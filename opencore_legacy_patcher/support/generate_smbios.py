@@ -17,40 +17,36 @@ def set_smbios_model_spoof(model):
     try:
         smbios_data.smbios_dictionary[model]["Screen Size"]
         # Found mobile SMBIOS
-        if model.startswith("MacBookAir"):
-            return "MacBookAir8,1"
+        if model.startswith("MacBookAir") or model.startswith("MacBook"):
+            # FIX: No Intel MacBook Airs or MacBooks are supported in Tahoe.
+            # Route them to the 13" Intel MacBookPro16,2 which is still native.
+            return "MacBookPro16,2"
         elif model.startswith("MacBookPro"):
-            if smbios_data.smbios_dictionary[model]["Screen Size"] == 13:
-                return "MacBookPro14,1"
-            elif smbios_data.smbios_dictionary[model]["Screen Size"] >= 15:
-                # 15" and 17"
-                return "MacBookPro14,3"
+            screen_size = smbios_data.smbios_dictionary[model]["Screen Size"]
+            if screen_size == 13:
+                # MacBookPro16,2 is the 4-Thunderbolt 2020 Intel model supported in Tahoe
+                return "MacBookPro16,2"
+            elif screen_size >= 15:
+                # 15" and 16" older models go to the native 16" baseline
+                return "MacBookPro16,1"
             else:
-                # Unknown Model
-                raise Exception(f"Unknown SMBIOS for spoofing: {model}")
-        elif model.startswith("MacBook"):
-            if smbios_data.smbios_dictionary[model]["Screen Size"] == 13:
-                return "MacBookAir8,1"
-            elif smbios_data.smbios_dictionary[model]["Screen Size"] == 12:
-                return "MacBook10,1"
-            else:
-                # Unknown Model
                 raise Exception(f"Unknown SMBIOS for spoofing: {model}")
         else:
-            # Unknown Model
             raise Exception(f"Unknown SMBIOS for spoofing: {model}")
     except KeyError:
         # Found desktop model
         if model.startswith("MacPro") or model.startswith("Xserve"):
             return "MacPro7,1"
         elif model.startswith("Macmini"):
-            return "Macmini8,1"
+            return "MacPro7,1"
         elif model.startswith("iMac"):
             if smbios_data.smbios_dictionary[model]["Max OS Supported"] <= os_data.os_data.high_sierra:
-                # Models dropped in Mojave either do not have an iGPU, or should have them disabled
                 return "iMacPro1,1"
             else:
-                return "iMac18,3"
+                # iMac20,1 / iMac20,2 are the 2020 Intel iMacs still supported in Tahoe
+                return "iMac20,1"
+        else:
+            raise Exception(f"Unknown SMBIOS for spoofing: {model}")
         else:
             # Unknown Model
             raise Exception(f"Unknown SMBIOS for spoofing: {model}")
