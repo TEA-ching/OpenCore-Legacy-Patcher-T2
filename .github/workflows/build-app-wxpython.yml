@@ -90,7 +90,7 @@ jobs:
           path: ./dist/OpenCore-Patcher.pkg
 
       - name: Upload Uninstaller Package to Artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v5
         with:
           name: OpenCore-Patcher-Uninstaller.pkg
           path: ./dist/OpenCore-Patcher-Uninstaller.pkg
