@@ -8,6 +8,7 @@ import threading
 import traceback
 import webbrowser
 import wx.html2
+import platform
 
 from .. import constants
 
@@ -37,6 +38,17 @@ class InstallOCFrame(wx.Frame):
     """
     Create a frame for installing OpenCore to disk
     """
+    
+    def get_mac_version():
+        # platform.mac_ver() returns a tuple like ('13.4.1', ('', '', ''), 'arm64')
+        os_version_str = platform.mac_ver()[0]
+        
+        if not os_version_str:
+            return (0, 0) # Not a macOS system
+            
+        # Convert '13.4.1' into an integer tuple: (13, 4, 1)
+        return tuple(map(int, os_version_str.split('.')))
+    
     def __init__(self, parent: wx.Frame, title: str, global_constants: constants.Constants, screen_location: tuple = None):
         logging.info("Initializing Install OpenCore Frame")
         super(InstallOCFrame, self).__init__(parent, title=title, size=(300, 120), style=wx.DEFAULT_FRAME_STYLE & ~(wx.RESIZE_BORDER | wx.MAXIMIZE_BOX))
@@ -100,14 +112,18 @@ class InstallOCFrame(wx.Frame):
         """
         Fetch information on local disks
         """
+        logging.info("You're running macOS version older than macOS 10.12 Sierra. Cleaning up output...")
         self.available_disks = install.tui_disk_installation(self.constants).list_disks()
 
         # Need to clean up output on pre-Sierra
         # Disk images are mixed in with regular disks (ex. payloads.dmg)
         ignore = ["disk image", "read-only", "virtual"]
-        for disk in self.available_disks.copy():
-            if any(string in self.available_disks[disk]['name'].lower() for string in ignore):
-                del self.available_disks[disk]
+        if current_version < (10, 12):
+            for disk in self.available_disks.copy():
+                if any(string in self.available_disks[disk]['name'].lower() for string in ignore):
+                    del self.available_disks[disk]
+        else:
+            logging.info("You're running macOS Sierra or later. No need to clean up legacy output.")
 
 
     def _display_disks(self) -> None:
