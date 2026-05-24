@@ -52,8 +52,6 @@ _T2_UHD617_MODELS = {
 _T2_NO_IGPU_MODELS = {
     "MacPro7,1",       # Mac Pro 2019
     "iMacPro1,1",      # iMac Pro 2017
-    "iMac19,1",        # iMac 27-inch 2019 (Radeon only, no iGPU injection needed)
-    "iMac19,2",        # iMac 21.5-inch 2019
     "iMac20,1",        # iMac 27-inch 2020
     "iMac20,2",        # iMac 27-inch 2020 CTO
 }
