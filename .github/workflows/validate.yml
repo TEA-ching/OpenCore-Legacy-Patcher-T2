@@ -16,6 +16,6 @@ jobs:
     name: Validate
     runs-on: x86_64_monterey
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v5
       - name: Validate
         run: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 OpenCore-Patcher-GUI.command --validate
