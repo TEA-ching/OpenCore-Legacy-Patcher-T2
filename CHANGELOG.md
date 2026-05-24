@@ -1,5 +1,4 @@
 # OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungslog
-## 4.0.0 alpha 16:
 
 ## 4.0.0 alpha 14:
 This release:
