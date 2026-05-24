@@ -4,7 +4,6 @@ gui_update.py: Generate UI for updating the patcher
 
 import wx
 import sys
-import time
 import logging
 import threading
 import subprocess
@@ -51,7 +50,6 @@ class UpdateFrame(wx.Frame):
             self.Centre()
             self.screen_location = self.GetScreenPosition()
 
-
         if url == "" or version_label == "":
             dict = updates.CheckBinaryUpdates(self.constants).check_binary_updates()
             if dict:
@@ -76,9 +74,9 @@ class UpdateFrame(wx.Frame):
         )
 
         # Title: Preparing update
-        title_label = wx.StaticText(self.frame, label="Preparing download... this may take several minutes", pos=(-1,1))
-        title_label.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
-        title_label.Centre(wx.HORIZONTAL)
+        self.title_label = wx.StaticText(self.frame, label="Preparing download... this may take several minutes", pos=(-1, 1))
+        self.title_label.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
+        self.title_label.Centre(wx.HORIZONTAL)
 
         # Progress bar
         progress_bar = wx.Gauge(self.frame, range=100, pos=(10, 50), size=(300, 20))
@@ -92,105 +90,119 @@ class UpdateFrame(wx.Frame):
 
         self.frame.Centre()
         self.frame.Show()
-        wx.Yield()
 
+        # Instantiating timer variables for the exit countdown
+        self.timer_countdown = 5
+        self.exit_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_exit_timer_tick, self.exit_timer)
+
+        # Start the master orchestration workflow on a background thread
+        threading.Thread(target=self._workflow_thread, daemon=True).start()
+
+    def _workflow_thread(self) -> None:
+        """
+        Background orchestrator thread. Keeps tasks entirely off the main loop,
+        preventing GUI lockups and avoiding hazardous wx.Yield use.
+        """
         download_obj = None
-        def _fetch_update() -> None:
-            nonlocal download_obj
-            file_name = "OpenCore-Patcher.pkg.zip" if url.endswith(".zip") else "OpenCore-Patcher.pkg"
-            download_obj = network_handler.DownloadObject(url, self.constants.payload_path / file_name)
+        file_name = "OpenCore-Patcher.pkg.zip" if self.url.endswith(".zip") else "OpenCore-Patcher.pkg"
+        download_obj = network_handler.DownloadObject(self.url, self.constants.payload_path / file_name)
 
-        thread = threading.Thread(target=_fetch_update)
+        # --- Phase 1: Download ---
+        thread = threading.Thread(target=download_obj.download)
         thread.start()
         gui_support.wait_for_thread(thread)
 
-        gui_download.DownloadFrame(
-            self.frame,
-            title=self.title,
-            global_constants=self.constants,
-            download_obj=download_obj,
-            item_name=f"OpenCore Patcher {version_label}",
-            download_icon=str(self.constants.app_icon_path)
-        )
+        if not getattr(download_obj, 'download_complete', False):
+            fallback_text = "Failed to download update. If you continue to have this issue, please manually download the update."
+            wx.CallAfter(self._handle_fatal_failure, fallback_text, "Critical Error!")
+            return
 
-        if download_obj.download_complete is False:
-            progress_bar_animation.stop_pulse()
-            progress_bar.SetValue(0)
-            wx.MessageBox("Failed to download update. If you continue to have this issue, please manually download OpenCore Legacy Patcher off Github", "Critical Error!", wx.OK | wx.ICON_ERROR)
-            sys.exit(1)
-
-        # Title: Extracting update
-        title_label.SetLabel("Extracting update...")
-        title_label.Centre(wx.HORIZONTAL)
-        wx.Yield()
-
+        # --- Phase 2: Extraction ---
+        wx.CallAfter(self._update_status_label, "Extracting update...")
+        
         thread = threading.Thread(target=self._extract_update)
         thread.start()
-
         gui_support.wait_for_thread(thread)
 
-        # Title: Installing update
-        title_label.SetLabel("Installing update...")
-        title_label.Centre(wx.HORIZONTAL)
+        # --- Phase 3: Installation ---
+        wx.CallAfter(self._update_status_label, "Installing update...")
 
         thread = threading.Thread(target=self._install_update)
         thread.start()
-
         gui_support.wait_for_thread(thread)
 
-        # Title: Update complete
-        title_label.SetLabel("Update complete!")
-        title_label.Centre(wx.HORIZONTAL)
+        # --- Phase 4: Verification & Wrap-up ---
+        wx.CallAfter(self._finalize_ui_and_start_countdown)
 
-        # Progress bar
-        progress_bar.Hide()
-        progress_bar_animation.stop_pulse()
+    # =========================================================================
+    # ATOMIC MAIN-THREAD UI MUTATORS (Prevents race conditions / split events)
+    # =========================================================================
 
-        # Label: 0.6.6 has been installed to:
-        installed_label = wx.StaticText(self.frame, label=f"{version_label} has been installed:", pos=(-1, progress_bar.GetPosition().y - 15))
+    def _update_status_label(self, message: str) -> None:
+        """Safely alters text components atomically on the main thread."""
+        self.title_label.SetLabel(message)
+        self.title_label.Centre(wx.HORIZONTAL)
+
+    def _handle_fatal_failure(self, error_msg: str, title: str, is_cancelled: bool = False) -> None:
+        """
+        Executes atomically on the main thread to completely clean up UI elements 
+        and handle script termination instantly, preventing thread race conditions.
+        """
+        self.progress_bar_animation.stop_pulse()
+        self.progress_bar.SetValue(0)
+        
+        if is_cancelled:
+            wx.MessageBox(error_msg, title, wx.OK | wx.ICON_INFORMATION)
+        else:
+            wx.MessageBox(error_msg, title, wx.OK | wx.ICON_ERROR)
+            
+        sys.exit(1)
+
+    def _finalize_ui_and_start_countdown(self) -> None:
+        """Reconstructs the interface layout and initializes the exit timer safely."""
+        self.title_label.SetLabel("Update complete!")
+        self.title_label.Centre(wx.HORIZONTAL)
+
+        self.progress_bar.Hide()
+        self.progress_bar_animation.stop_pulse()
+
+        installed_label = wx.StaticText(self.frame, label=f"{self.version_label} has been installed:", pos=(-1, self.progress_bar.GetPosition().y - 15))
         installed_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_BOLD))
         installed_label.Centre(wx.HORIZONTAL)
 
-        # Label: '/Library/Application Support/Dortania'
         installed_path_label = wx.StaticText(self.frame, label='/Library/Application Support/Dortania', pos=(-1, installed_label.GetPosition().y + 20))
         installed_path_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         installed_path_label.Centre(wx.HORIZONTAL)
 
-        # Label: Launching update shortly...
-        launch_label = wx.StaticText(self.frame, label="Launching update shortly...", pos=(-1, installed_path_label.GetPosition().y + 30))
-        launch_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
-        launch_label.Centre(wx.HORIZONTAL)
+        self.launch_label = wx.StaticText(self.frame, label="Launching update shortly...", pos=(-1, installed_path_label.GetPosition().y + 30))
+        self.launch_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
+        self.launch_label.Centre(wx.HORIZONTAL)
 
-        # Adjust frame size
-        self.frame.SetSize((-1, launch_label.GetPosition().y + 60))
+        self.frame.SetSize((-1, self.launch_label.GetPosition().y + 60))
 
+        # Fire and forget launch execution thread
         thread = threading.Thread(target=self._launch_update)
         thread.start()
+        
+        # Fire non-blocking main loop timer event every 1 second (1000ms)
+        self.exit_timer.Start(1000)
 
-        gui_support.wait_for_thread(thread)
+    def _on_exit_timer_tick(self, event: wx.TimerEvent) -> None:
+        """Non-blocking timer callback driven directly by native OS event loop."""
+        if self.timer_countdown > 0:
+            self.launch_label.SetLabel(f"Closing old process in {self.timer_countdown} seconds")
+            self.launch_label.Centre(wx.HORIZONTAL)
+            self.timer_countdown -= 1
+        else:
+            self.exit_timer.Stop()
+            sys.exit(0)
 
-        timer = 5
-        while True:
-            launch_label.SetLabel(f"Closing old process in {timer} seconds")
-            launch_label.Centre(wx.HORIZONTAL)
-            wx.Yield()
-            time.sleep(1)
-            timer -= 1
-            if timer == 0:
-                break
-
-        sys.exit(0)
-
+    # =========================================================================
+    # SYSTEM ACTIONS (Executed inside sub-threads safely)
+    # =========================================================================
 
     def _extract_update(self) -> None:
-        """
-        Extracts the update
-
-        Logic:
-        - Distributed through GitHub Actions: Requires extraction
-        - Distributed through GitHub Releases: No extraction required
-        """
-        # GitHub Release
         if not self.url.endswith(".zip"):
             return
 
@@ -203,48 +215,40 @@ class UpdateFrame(wx.Frame):
         )
         if result.returncode != 0:
             logging.error(f"Failed to extract update.")
-            logging.exception("Stack Trace:")
             subprocess_wrapper.log(result)
-            wx.CallAfter(self.progress_bar_animation.stop_pulse)
-            wx.CallAfter(self.progress_bar.SetValue, 0)
-            wx.CallAfter(wx.MessageBox, f"Failed to extract update. Error: {result.stderr.decode('utf-8')}", "Critical Error!", wx.OK | wx.ICON_ERROR)
-            wx.CallAfter(sys.exit, 1)
-
+            
+            error_str = f"Failed to extract update. Error: {result.stderr.decode('utf-8')}"
+            wx.CallAfter(self._handle_fatal_failure, error_str, "Critical Error!")
+            # Ensure background thread execution chain halts gracefully
+            sys.exit(1)
 
     def _install_update(self) -> None:
-        """
-        Install PKG
-        """
         logging.info(f"Installing update: {self.pkg_download_path}")
         result = subprocess_wrapper.run_as_root(["/usr/sbin/installer", "-pkg", str(self.pkg_download_path), "-target", "/"], capture_output=True)
+        
         if result.returncode != 0:
-            wx.CallAfter(self.progress_bar_animation.stop_pulse)
-            wx.CallAfter(self.progress_bar.SetValue, 0)
-            if "User cancelled" in result.stderr.decode("utf-8"):
+            stderr_output = result.stderr.decode("utf-8")
+            
+            if "User cancelled" in stderr_output:
                 logging.info("User cancelled update")
-                wx.CallAfter(wx.MessageBox, "User cancelled update", "Update Cancelled", wx.OK | wx.ICON_INFORMATION)
+                wx.CallAfter(self._handle_fatal_failure, "User cancelled update", "Update Cancelled", is_cancelled=True)
             else:
-                logging.critical("The app failed to update via the builtin updater. The error is the following:")
-                logging.exception("Stack Trace:")
-                logging.info("We'll try our best to fix the issue for you. If we can't, it will automatically fall back to in place upgrade.")
+                logging.critical("The app failed to update via the builtin updater.")
                 subprocess_wrapper.log(result)
 
-                # If it fails, fall back to opening the PKG
                 logging.error("Failed to install update via the builtin updater, switching to in-place upgrade instead...")
                 subprocess.run(["/usr/bin/open", str(self.pkg_download_path)])
-
-                wx.CallAfter(wx.MessageBox, f"Failed to install update. Please, go to https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/tree/main, go to releases /n/n and download a fresh pkg file and perform inplace upgrade, just as if you were to install a fresh copy.", "Critical Error!", wx.OK | wx.ICON_ERROR)
-            wx.CallAfter(sys.exit, 1)
-
+                
+                support_url = getattr(self.constants, 'support_url', 'the official repository')
+                fallback_msg = f"Failed to install update automatically. Please visit {support_url} to manually download the package and perform an in-place upgrade."
+                wx.CallAfter(self._handle_fatal_failure, fallback_msg, "Critical Error!")
+            
+            sys.exit(1)
 
     def _launch_update(self) -> None:
         try:
-            """
-            Launches newly installed update
-            """
             logging.info("Launching update: '/Library/Application Support/Dortania/OpenCore-Patcher.app'")
             subprocess.Popen(["/Library/Application Support/Dortania/OpenCore-Patcher.app/Contents/MacOS/OpenCore-Patcher", "--update_installed"])
         except Exception as e:
-            logging.error("Launching the update via the builtin updater failed due to the following error:")
+            logging.error("Launching the update via the builtin updater failed.")
             logging.exception("Stack Trace:")
-            logging.info("We'll fix the issue for you.")
