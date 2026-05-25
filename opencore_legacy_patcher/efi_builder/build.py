@@ -64,16 +64,6 @@ class BuildOpenCore:
         except Exception as e:
             logging.error(f"Function Error: {e}")
             sys.exit(3)
-
-    def _remove_conflicting_t2_ssdt(self) -> None:
-        """
-        Removes SSDT-T2-Fake.aml if a T2 Mac is detected, to prevent conflicts
-        with newer T2-specific kernel patches and boot-args.
-        """
-        # Check if the current model is a T2 Mac by checking for the "T2_CHIP" feature.
-        # This relies on constants.device_properties being populated, which happens
-        # during the defaults generation phase.
-        is_t2_mac = self.model in model_array.T2Macs or "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", [])
     
     def _build_efi(self) -> None:
         """
@@ -151,6 +141,12 @@ class BuildOpenCore:
                 sys.exit(3)
         else:
             # For Non-T2 Legacy Hardware
+            # Target 2017 iMac models specifically to bypass vt-d/broadcom complications
+            _IMAC_2017_MODELS = ["iMac18,1", "iMac18,2", "iMac18,3"]
+            if self.model in _IMAC_2017_MODELS:
+                if "dart=0" not in args_list:
+                    logging.info(f"- Appending dart=0 boot argument for 2017 iMac hardware target to fix WiFi/Bluetooth issues on macOS 26 Tahoe ({self.model})")
+                    args_list.append("dart=0")
             if "NVRAM" not in self.config:
                 self.config["NVRAM"] = {"Add": {}}
             if "7C436110-AB2A-4BBB-A880-FE41995C9F82" not in self.config["NVRAM"]["Add"]:
