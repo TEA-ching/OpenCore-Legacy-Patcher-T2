@@ -178,63 +178,89 @@ class BuildOpenCore:
             self.config["Misc"]["BlessOverride"].append("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")
     
     
-    def _mount_efi_partition(self) -> bool:
+    def _get_and_mount_opencore_partition(self) -> bool:
         """
-        Locate and mount the internal EFI partition if not already mounted.
-        Uses 'diskutil info' to check mount status before attempting to mount.
-        Requires sudo — runs via osascript to request privilege elevation on macOS.
-        Returns True if EFI is mounted (or was already mounted), False on failure.
+        Locate and mount the 'OpenCore' partition. 
+        If it does not exist, attempts to non-destructively create a 200MB FAT32 
+        'OpenCore' partition from the primary internal drive, then mounts it.
+        Returns True on success, False on any failure.
         """
         import subprocess
+        import logging
 
-        try:
-            # Find all EFI partitions from diskutil list
-            result = subprocess.check_output(["diskutil", "list"], text=True)
-            efi_devices = []
-            for line in result.splitlines():
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                parts = stripped.split()
-                # diskutil list format: index  type  name  size  identifier
-                # EFI lines look like: "1:  EFI EFI  209.7 MB  disk0s1"
-                # The device identifier is always the last token
-                if "EFI" in parts and len(parts) >= 2:
-                    dev = parts[-1]
-                    if dev.startswith("disk"):
-                        efi_devices.append(dev)
-
-            if not efi_devices:
-                logging.warning("- No EFI partition found via diskutil list")
+        def run_with_sudo(cmd_str: str) -> bool:
+            """Helper to run a shell command with administrator privileges via osascript."""
+            logging.info(f"- Executing privileged command: {cmd_str}")
+            osascript_cmd = [
+                "osascript", "-e",
+                f'do shell script "{cmd_str}" with administrator privileges'
+            ]
+            try:
+                subprocess.run(osascript_cmd, check=True, capture_output=True)
+                return True
+            except subprocess.CalledProcessError as e:
+                stderr_err = e.stderr.decode().strip() if e.stderr else ""
+                logging.error(f"Sudo command failed: {stderr_err if stderr_err else e}")
                 return False
 
-            for dev in efi_devices:
-                # Check if already mounted
-                info = subprocess.check_output(["diskutil", "info", dev], text=True)
-                if "Mounted:                   Yes" in info:
-                    logging.info(f"- EFI partition {dev} is already mounted")
-                    return True
+        try:
+            # 1. Look for an existing OpenCore partition
+            result = subprocess.check_output(["diskutil", "list"], text=True)
+            for line in result.splitlines():
+                if "OpenCore" in line:
+                    parts = line.strip().split()
+                    if parts:
+                        dev = parts[-1]
+                        if dev.startswith("disk"):
+                            # Check if already mounted
+                            info = subprocess.check_output(["diskutil", "info", dev], text=True)
+                            if "Mounted:               Yes" in info:
+                                logging.info(f"- 'OpenCore' partition ({dev}) is already mounted.")
+                                return True
+                            
+                            # Try to mount it
+                            return run_with_sudo(f"diskutil mount {dev}")
 
-                # Not mounted — try with sudo via osascript (shows macOS auth dialog)
-                logging.info(f"- Mounting EFI partition {dev} (requires administrator password)")
-                mount_cmd = f"diskutil mount {dev}"
-                osascript_cmd = [
-                    "osascript", "-e",
-                    f'do shell script "{mount_cmd}" with administrator privileges'
-                ]
-                try:
-                    subprocess.run(osascript_cmd, check=True, capture_output=True)
-                    logging.info(f"- Successfully mounted {dev}")
-                    return True
-                except subprocess.CalledProcessError as e:
-                    logging.warning(f"- Failed to mount {dev}: {e}")
-                    continue
+            # 2. Partition not found — Time to create a 200MB slice
+            logging.warning("- 'OpenCore' partition not found. Attempting to create one...")
 
-            logging.warning("- Could not mount any EFI partition")
-            return False
+            # Determine the primary boot disk identifier
+            info_root = subprocess.check_output(["diskutil", "info", "/"], text=True)
+            boot_dev = ""
+            for line in info_root.splitlines():
+                if "Device Identifier:" in line:
+                    boot_dev = line.split()[-1]
+                    break
+            
+            if not boot_dev:
+                logging.error("- Could not pinpoint the primary boot disk identifier.")
+                return False
+
+            # Determine resizing strategy based on filesystem type
+            if "APFS" in info_root:
+                # Target the container layout (e.g., disk1)
+                container_id = boot_dev if boot_dev.startswith("disk1") else "disk1" 
+                
+                logging.info(f"- Detected APFS format. Splitting container {container_id}...")
+                # '0' tells diskutil to shrink the container dynamically to fit the new 200M partition
+                create_cmd = f"diskutil apfs resizeContainer {container_id} 0 FAT32 OpenCore 200M"
+            
+            else:
+                # Traditional HFS+ / CoreStorage handling for older environments (like native 2007 iMac)
+                logging.info(f"- Detected legacy format on {boot_dev}. Resizing HFS+ volume...")
+                # '0g' tells diskutil to shrink the volume by exactly enough to squeeze in the 200M partition
+                create_cmd = f"diskutil resizeVolume {boot_dev} 0g FAT32 OpenCore 200M"
+
+            # Execute partition mapping
+            if run_with_sudo(create_cmd):
+                logging.info("- Partition created successfully. Re-verifying mount status...")
+                return True
+            else:
+                logging.error("- Failed to resize drive map and allocate OpenCore partition.")
+                return False
 
         except Exception as e:
-            logging.error("- EFI partition mount failed unexpectedly")
+            logging.error("- Critical failure managing disk layouts.")
             logging.exception(e)
             return False
 
