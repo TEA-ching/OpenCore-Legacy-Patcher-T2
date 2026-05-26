@@ -169,7 +169,10 @@ class SettingsFrame(wx.Frame):
 
                     checkbox.SetValue(value)
                     checkbox.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_BOLD))
-                    event = lambda event, warning=setting_info["warning"] if "warning" in setting_info else "", override=bool(setting_info["override_function"]) if "override_function" in setting_info else False: self.on_checkbox(event, warning, override)
+                    
+                    # PASS THE ACTUAL CALLABLE OBJECT OR NONE, DO NOT CAST TO BOOL
+                    event = lambda event, warning=setting_info.get("warning", ""), override=setting_info.get("override_function", None): self.on_checkbox(event, warning, override)
+                    
                     checkbox.Bind(wx.EVT_CHECKBOX, event)
                     if "condition" in setting_info:
                         checkbox.Enable(setting_info["condition"])
@@ -1079,15 +1082,19 @@ Hardware Information:
 
     def on_checkbox(self, event: wx.Event, warning_pop: str = "", override_function: bool = False) -> None:
         """
+        Handles checkbox toggle actions across settings blocks defensively.
         """
         label = event.GetEventObject().GetLabel()
         value = event.GetEventObject().GetValue()
+        
         if warning_pop != "" and value is True:
             warning = wx.MessageDialog(self.frame_modal, warning_pop, f"Warning: {label}", wx.YES_NO | wx.ICON_WARNING | wx.NO_DEFAULT)
             if warning.ShowModal() == wx.ID_NO:
                 event.GetEventObject().SetValue(not event.GetEventObject().GetValue())
                 return
-            if label == "Allow native models":
+            
+            # FIX: Normalize matching string check to capture both label configurations safely
+            if label in ["Allow native models", "Allow spoofing native Macs"]:
                 if self.constants.computer.real_model in smbios_data.smbios_dictionary:
                     if self.constants.detected_os > smbios_data.smbios_dictionary[self.constants.computer.real_model]["Max OS Supported"]:
                         chassis_type = "aluminum"
@@ -1097,17 +1104,26 @@ Hardware Information:
                         if dlg.ShowModal() == wx.ID_NO:
                             event.GetEventObject().SetValue(not event.GetEventObject().GetValue())
                             return
+
         if override_function is True:
             self.settings[self._find_parent_for_key(label)][label]["override_function"](self.settings[self._find_parent_for_key(label)][label]["variable"], value, self.settings[self._find_parent_for_key(label)][label]["constants_variable"] if "constants_variable" in self.settings[self._find_parent_for_key(label)][label] else None)
             return
 
         self._update_setting(self.settings[self._find_parent_for_key(label)][label]["variable"], value)
-        if label == "Allow native models":
-            if gui_support.CheckProperties(self.constants).host_can_build() is True:
-                self.parent.build_button.Enable()
+        
+        # FIX: Align label target criteria with dynamic schema keys safely
+        if label in ["Allow native models", "Allow spoofing native Macs"]:
+            # Check if parent exists and actually has an initialized build_button instance
+            if hasattr(self, "parent") and self.parent and hasattr(self.parent, "build_button"):
+                if self.parent.build_button is not None:
+                    if gui_support.CheckProperties(self.constants).host_can_build() is True:
+                        self.parent.build_button.Enable()
+                    else:
+                        self.parent.build_button.Disable()
+                else:
+                    logging.info(f"Parent build_button is unallocated. Status update for '{label}' bypassed.")
             else:
-                self.parent.build_button.Disable()
-
+                logging.info(f"Parent structure does not maintain a build layout button hook; state manipulation bypassed.")
 
     def on_spinctrl(self, event: wx.Event, label: str) -> None:
         """
