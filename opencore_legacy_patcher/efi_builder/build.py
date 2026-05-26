@@ -178,12 +178,12 @@ class BuildOpenCore:
             self.config["Misc"]["BlessOverride"].append("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")
     
     
-    def _get_and_mount_opencore_partition(self) -> bool:
+  def _mount_efi_partition(self) -> bool:
         """
-        Locate and mount the 'OpenCore' partition. 
+        Locate and mount the custom 'OpenCore' partition. 
         If it does not exist, attempts to non-destructively create a 200MB FAT32 
         'OpenCore' partition from the primary internal drive, then mounts it.
-        Returns True on success, False on any failure.
+        Kept original method name to prevent breaking upstream patcher execution hooks.
         """
         import subprocess
         import logging
@@ -238,17 +238,12 @@ class BuildOpenCore:
 
             # Determine resizing strategy based on filesystem type
             if "APFS" in info_root:
-                # Target the container layout (e.g., disk1)
                 container_id = boot_dev if boot_dev.startswith("disk1") else "disk1" 
-                
                 logging.info(f"- Detected APFS format. Splitting container {container_id}...")
-                # '0' tells diskutil to shrink the container dynamically to fit the new 200M partition
                 create_cmd = f"diskutil apfs resizeContainer {container_id} 0 FAT32 OpenCore 200M"
             
             else:
-                # Traditional HFS+ / CoreStorage handling for older environments (like native 2007 iMac)
                 logging.info(f"- Detected legacy format on {boot_dev}. Resizing HFS+ volume...")
-                # '0g' tells diskutil to shrink the volume by exactly enough to squeeze in the 200M partition
                 create_cmd = f"diskutil resizeVolume {boot_dev} 0g FAT32 OpenCore 200M"
 
             # Execute partition mapping
