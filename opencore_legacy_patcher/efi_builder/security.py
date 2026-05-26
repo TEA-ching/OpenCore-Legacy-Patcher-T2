@@ -50,10 +50,10 @@ _T2_UHD617_MODELS = {
 # T2 Mac models that do not have an Intel iGPU, or where iGPU injection
 # is not required/recommended.
 _T2_NO_IGPU_MODELS = {
-    "MacPro7,1",       # Mac Pro 2019
+    # "MacPro7,1",       # Mac Pro 2019 - this model is natively supported by macOS 26 Tahoe
     "iMacPro1,1",      # iMac Pro 2017
-    "iMac20,1",        # iMac 27-inch 2020
-    "iMac20,2",        # iMac 27-inch 2020 CTO
+    # "iMac20,1",        # iMac 27-inch 2020 - this model is natively supported by macOS 26 Tahoe
+    # "iMac20,2",        # iMac 27-inch 2020 CTO - this model is natively supported by macOS 26 Tahoe
 }
 
 
