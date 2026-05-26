@@ -364,15 +364,14 @@ class BuildSecurity:
                 "Comment": "Bypass corecrypto FIPS POST (T2 Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.kec.corecrypto",
-                "Find":        binascii.unhexlify("85C00F8400000000"),
-                "Replace":     binascii.unhexlify("85C0909090909090"),
-                "Mask":        binascii.unhexlify("FFFFFF0F00000000"),
-                "ReplaceMask": binascii.unhexlify("FFFFFF0F00000000"),
+                "Find": binascii.unhexlify("85C00F84"),
+                "Replace": binascii.unhexlify("85C090E9"),
+                "Mask": binascii.unhexlify("FFFFFFFF"),
+                "ReplaceMask": binascii.unhexlify("FFFFFFFF"),
                 "MinKernel": "25.0.0",
                 "MaxKernel": "25.99.99",
                 "Count": 1,
             })
-
     # ------------------------------------------------------------------
     # Main build entry point
     # ------------------------------------------------------------------
@@ -383,19 +382,52 @@ class BuildSecurity:
         OCLP_NVRAM_UUID  = "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"
 
         # ==============================================================
-        # Branch A: T2 Mac Base Security Configuration
+        # Branch A: T2 Mac Consolidated Security Configuration
         # ==============================================================
         if self._is_t2_mac():
-            logging.info("- T2 Mac detected — applying T2 security settings")
+            logging.info("- T2 Mac detected — applying consolidated T2 security settings")
+            
+            # 1. Base initialization and external fallbacks
             self._apply_t2_security_fallback(self._get_t2_security_fallback(), APPLE_NVRAM_UUID)
             self._apply_t2_memory_descriptor_overrides(APPLE_NVRAM_UUID)
             self._apply_t2_graphics_injection()
             self._apply_t2_kernel_patches_tahoe()
 
+            # 2. Hard Overrides (Guarantees safety against structural contamination)
+            logging.info("- Final T2 verification pass (Enforcing absolute boundaries)")
+            self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
+            self.config["Misc"]["Security"]["ApECID"]          = 0
+            self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
+
+            # 3. Base structural boot arguments
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-v keepsyms=1")
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "nvme_shutdown_timestamp=0")
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-disable_sidecar_mac")
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-disable_media_analysis")
+
+            # 4. Scope graphics injection boot-args strictly to active iGPU targets
+            if self._requires_t2_graphics_injection():
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxonln=1")
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxfw=2")
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "forceRenderStandby=0")
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "agdpmod=vit9696")
+                
+                if self.model in _T2_UHD630_MODELS:
+                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxnoredir=1")
+
+            # 5. Scope modern OS bypass flags cleanly
+            if self.constants.detected_os >= os_data.os_data.tahoe:
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "cryptex=0")
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "cs_allow_invalid=1")
+
+            logging.info("  > Final T2 verification complete. Ghost arguments excluded.")
+            return  # Clean break: T2 machines completely skip Branch B and Shared evaluations
+
         # ==============================================================
         # Branch B: Non-T2 Mac with SIP lowered
         # ==============================================================
-        elif self.constants.sip_status is False or self.constants.custom_sip_value:
+        if self.constants.sip_status is False or self.constants.custom_sip_value:
             logging.info("- Non-T2 Mac: SIP lowered — applying SIP-related settings")
             
             # Electron app crash fix under modified SIP
@@ -427,16 +459,12 @@ class BuildSecurity:
             )
 
         # ==============================================================
-        # Shared: AMFI / Library Validation (T2 and non-T2 verification)
+        # Shared: AMFI / Library Validation (Legacy Non-T2 verification targets)
         # ==============================================================
         if self.constants.disable_cs_lv is True:
             if self.constants.disable_amfi is True:
-                if self._is_t2_mac():
-                    logging.info("- Disabling AMFI (T2 Mac Isolation Pass)")
-                    self._apply_t2_amfi_boot_args(APPLE_NVRAM_UUID)
-                else:
-                    logging.info("- Disabling AMFI (non-T2 Mac)")
-                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80")
+                logging.info("- Disabling AMFI (non-T2 Mac)")
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80")
             else:
                 logging.info("- Disabling Library Validation")
                 support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
@@ -450,7 +478,7 @@ class BuildSecurity:
                     "CSLVFixup.kext", self.constants.cslvfixup_version, self.constants.cslvfixup_path
                 )
 
-        if self.constants.secure_status is False and not self._is_t2_mac():
+        if self.constants.secure_status is False:
             logging.info("- Disabling SecureBootModel (non-T2)")
             self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
 
@@ -459,41 +487,3 @@ class BuildSecurity:
             support.BuildSupport(self.model, self.constants, self.config).enable_kext(
                 "AMFIPass.kext", self.constants.amfipass_version, self.constants.amfipass_path
             )
-
-        # ==============================================================
-        # FINAL T2 OVERRIDE PASS
-        # Must be the LAST operation in _build() — guarantees no earlier
-        # code can overwrite T2 security settings. Skipped on non-T2 targets.
-        # ==============================================================
-        if self._is_t2_mac():
-            logging.info("- Final T2 override pass (T2 ONLY — ensures no overwrites)")
-
-            # Absolute bare-minimum configuration variables for T2 runtime stability
-            self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
-            self.config["Misc"]["Security"]["ApECID"]          = 0
-            self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
-
-            # Baseline structural arguments
-            self._apply_t2_amfi_boot_args(APPLE_NVRAM_UUID)
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-v keepsyms=1")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "nvme_shutdown_timestamp=0")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-disable_sidecar_mac")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-disable_media_analysis")
-
-            # Scope graphics injection strictly to machines containing Intel iGPUs
-            if self._requires_t2_graphics_injection():
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxonln=1")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxfw=2")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "forceRenderStandby=0")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "agdpmod=vit9696")
-                
-                if self.model in _T2_UHD630_MODELS:
-                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxnoredir=1")
-
-            # Scope modern OS bypass flags cleanly
-            if self.constants.detected_os >= os_data.os_data.tahoe:
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "cryptex=0")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "cs_allow_invalid=1")
-
-            logging.info("  > Final T2 verification complete. Ghost arguments excluded.")
