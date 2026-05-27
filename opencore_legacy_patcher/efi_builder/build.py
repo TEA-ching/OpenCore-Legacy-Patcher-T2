@@ -45,8 +45,8 @@ def rmtree_handler(func, path, exc_info) -> None:
     except Exception as e:
         logging.error(f"Function Error: {e}")
 
+
 class BuildOpenCore:
-        
     """
     Core Build Library for generating and validating OpenCore EFI Configurations
     compatible with genuine Macs
@@ -289,17 +289,16 @@ class BuildOpenCore:
 
             logging.info(f"- Target partition slice verified at: {new_slice_id}")
 
-            # Step 3: Raw block format phase with explicit race-condition bypass
+            # Step 3: Raw block format phase with definitive disk mounting bypass
             raw_device_node = new_slice_id.replace("disk", "rdisk")
             
-            # - Force unmount to break any proactive diskarbitrationd locks
-            # - Use explicit FAT32 block sizing properties (-b 4096 / -s 512 depending on raw node)
-            # - Implement a tiny block sleep to let the GPT table write settle before mounting
+            # Use diskutil mountDisk instead of regular mount to force diskarbitrationd 
+            # to refresh the parent table state and mount the new leaf leaf node cleanly.
             format_sequence = (
                 f"diskutil unmount /dev/{new_slice_id} >/dev/null 2>&1; "
                 f"/sbin/newfs_msdos -F 32 -b 4096 -v OpenCore /dev/{raw_device_node}; "
                 f"sleep 1; "
-                f"diskutil mount /dev/{new_slice_id}"
+                f"diskutil mountDisk /dev/{new_slice_id}"
             )
 
             logging.info(f"- Injecting native FAT32 structure directly onto raw block /dev/{raw_device_node}...")
@@ -428,7 +427,6 @@ class BuildOpenCore:
         guid["OCLP-Model"]   = self.model
 
     
-    
     def _build_opencore(self) -> None:
         """
         Kick off the build process
@@ -438,6 +436,7 @@ class BuildOpenCore:
         - Cleans working directory
         - Signs files
         - Validates generated EFI
+        - Synchronizes compiled structure to target partition node safely
         """
 
         # Generate OpenCore Configuration
@@ -446,9 +445,10 @@ class BuildOpenCore:
             self._build_efi()
         except Exception as e:
             logging.error(f"Whoops, Generating OpenCore configuration for {self.model} because of the following error:")
-            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.exception("Stack Trace:")
             logging.info("Please try again later.")
             sys.exit(3)
+            
         try:
             if self.constants.allow_oc_everywhere is False or self.constants.allow_native_spoofs is True or (self.constants.custom_serial_number != "" and self.constants.custom_board_serial_number != ""):
                 smbios.BuildSMBIOS(self.model, self.constants, self.config).set_smbios()
@@ -456,7 +456,7 @@ class BuildOpenCore:
             self._save_config()
         except Exception as e:
             logging.error(f"Whoops, spoofing the SMBIOS for {self.model} failed because of the following error:")
-            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.exception("Stack Trace:")
             logging.info("Please try again later.")
             sys.exit(3)
 
@@ -464,6 +464,24 @@ class BuildOpenCore:
         logging.info("Post-build handling")
         support.BuildSupport(self.model, self.constants, self.config).sign_files()
         support.BuildSupport(self.model, self.constants, self.config).validate_pathing()
+
+        # FIXED SEQUENCE: Sync finalized local assets to the newly created storage volume partition node
+        try:
+            target_volume = "/Volumes/OpenCore"
+            if Path(target_volume).exists():
+                logging.info(f"- Synchronizing generated architecture targets directly to mounted node: {target_volume}")
+                destination_efi = Path(target_volume) / "EFI"
+                
+                if destination_efi.exists():
+                    shutil.rmtree(destination_efi, onerror=rmtree_handler, ignore_errors=True)
+                
+                # Copy entire compiled local release folder directly onto our real physical partition
+                shutil.copytree(self.constants.opencore_release_folder, destination_efi)
+                logging.info("- Partition synchronization completed successfully.")
+            else:
+                logging.warning("- Target storage volume node not found mounted. OpenCore remains isolated in local Build-Folder.")
+        except Exception as sync_err:
+            logging.error(f"- Critical block copy synchronization pass failed: {sync_err}")
 
         logging.info("")
         logging.info(f"Your OpenCore EFI for {self.model} has been built at:")
