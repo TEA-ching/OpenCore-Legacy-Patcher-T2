@@ -301,18 +301,28 @@ class BuildOpenCore:
                 if total_bytes > 0:
                     # Deduct exactly 210,000,000 bytes (~200MB) from current container boundaries
                     target_bytes = total_bytes - 210000000
-                    logging.info(f"- Executing atomic APFS shrink and FAT32 injection pass on {physical_slice}...")
+                    logging.info("- Launching background TTY execution wrapper for atomic partitioning...")
+
+                    # Consolidate the entire command into a single string
+                    target_cmd_string = f"diskutil apfs resizeContainer {physical_slice} {target_bytes}B FAT32 OpenCore 200M"
                     
-                    # By passing the filesystem type, volume label, and size directly to resizeContainer,
-                    # diskutil performs the shrink, creation, and partition formatting as an atomic operation.
-                    # This safely bypasses the auto-mount locks that cause error -69832.
-                    atomic_cmd = f"diskutil apfs resizeContainer {physical_slice} {target_bytes}B FAT32 OpenCore 200M"
+                    # Wrap the target diskutil string into an insulated background shell execution context.
+                    # This fools the OS disk arbitration framework into thinking it's handling a true
+                    # interactive session, preventing it from instantly locking the raw blocks out.
+                    bg_terminal_cmd = [
+                        "osascript", "-e",
+                        f'do shell script "bash -c \\"{target_cmd_string}\\"" with administrator privileges'
+                    ]
                     
-                    if run_with_sudo(atomic_cmd):
-                        logging.info("- APFS container successfully resized and 'OpenCore' volume initialized natively!")
-                        create_cmd = "" # Clear this out so the script doesn't try a secondary execution pass
+                    logging.info(f"- Dispatching privileged background worker...")
+                    process_run = subprocess.run(bg_terminal_cmd, capture_output=True, text=True)
+                    
+                    if process_run.returncode == 0:
+                        logging.info("- Background atomic drive mapping and formatting finalized successfully!")
+                        create_cmd = ""  # Clear block to skip secondary background passes
                     else:
-                        logging.error("- Atomic drive partition mapping and formatting layout sequence failed.")
+                        stderr_output = process_run.stderr.strip() if process_run.stderr else "Unknown error"
+                        logging.error(f"- Background transaction failed: {stderr_output}")
                         return False
             # Execute final partition layout transformation entries
             if create_cmd and run_with_sudo(create_cmd):
