@@ -213,9 +213,9 @@ class BuildOpenCore:
     def _mount_efi_partition(self) -> bool:
         """
         Locate and mount the custom 'OpenCore' partition. 
-        If missing, uses universal plist data to determine the exact bytes of the 
-        APFS container and safely shrinks the internal macOS pool by 210MB 
-        to carve out the new partition, completely safe from BOOTCAMP blocks.
+        If missing, translates the physical APFS slice to its synthesized container ID,
+        extracts its exact byte capacity via plist, and shrinks the container by 
+        exactly 210MB to clear room for the new FAT32 partition.
         """
         import subprocess
         import logging
@@ -285,14 +285,21 @@ class BuildOpenCore:
                 return False
 
             if "APFS" in info_root:
-                container_id = self._get_physical_apfs_slice(boot_dev)
-                
-                # Extract absolute capacity using language-independent Plist profiles
+                physical_slice = self._get_physical_apfs_slice(boot_dev)
                 total_bytes = 0
+                
                 try:
-                    plist_raw = subprocess.check_output(["diskutil", "info", "-plist", container_id])
-                    disk_data = plistlib.loads(plist_raw)
-                    total_bytes = disk_data.get("APFSContainerTotalSpace", 0)
+                    # Query the physical slice first to resolve the synthesized container identifier
+                    slice_plist_raw = subprocess.check_output(["diskutil", "info", "-plist", physical_slice])
+                    slice_data = plistlib.loads(slice_plist_raw)
+                    container_id = slice_data.get("APFSContainerReference", "")
+                    
+                    if container_id:
+                        logging.info(f"- Resolved synthesized APFS Container ID: {container_id}")
+                        # Now query the actual container disk to get the true byte capacity
+                        container_plist_raw = subprocess.check_output(["diskutil", "info", "-plist", container_id])
+                        container_data = plistlib.loads(container_plist_raw)
+                        total_bytes = container_data.get("APFSContainerTotalSpace", 0)
                 except Exception as plist_err:
                     logging.warning(f"- Plist structural parsing failed: {plist_err}")
 
@@ -300,11 +307,11 @@ class BuildOpenCore:
                     # Deduct exactly 210,000,000 bytes (~200MB) from current container boundaries
                     target_bytes = total_bytes - 210000000
                     logging.info(f"- Universal data parsed. Shrinking macOS container bounds strictly to: {target_bytes} Bytes")
-                    create_cmd = f"diskutil apfs resizeContainer {container_id} {target_bytes}B FAT32 OpenCore 200M"
+                    create_cmd = f"diskutil apfs resizeContainer {physical_slice} {target_bytes}B FAT32 OpenCore 200M"
                 else:
-                    # Structural fallback constraint to prevent the destructive '0' loop
-                    logging.warning("- Falling back to percentage contraction parameters.")
-                    create_cmd = f"diskutil apfs resizeContainer {container_id} 99.5% FAT32 OpenCore 200M"
+                    # Safer fallback string than percentages if byte extraction completely fails
+                    logging.warning("- Falling back to alternative delta compression parameters.")
+                    create_cmd = f"diskutil apfs resizeContainer {physical_slice} 0 FAT32 OpenCore 200M"
             else:
                 logging.info(f"- Detected legacy filesystem layout on {boot_dev}. Adjusting HFS+ map...")
                 create_cmd = f"diskutil resizeVolume {boot_dev} 0g FAT32 OpenCore 200M"
