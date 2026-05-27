@@ -315,10 +315,12 @@ class BuildOpenCore:
                     disk_match = re.match(r"^(disk\d+)", physical_slice)
                     parent_disk = disk_match.group(1) if disk_match else "disk0"
 
-                    # Step 2: Add the partition slice wrapper using 'FREE' as the format argument.
-                    # This tells diskutil to alter the GPT partition tables WITHOUT calling the formatting binary.
-                    # This safely side-steps the timing loop race condition entirely.
-                    map_slice_cmd = f"diskutil addPartition {physical_slice} FREE OpenCore 200M"
+                    # Step 2: Add an unformatted partition placeholder.
+                    # We pass 'FREE' as the filesystem type and '0' as the size.
+                    # This tells diskutil to fill the exact 210MB free space gap we just carved out 
+                    # without running a file system formatter or triggering error -69850.
+                    # We target the parent_disk (e.g., disk0) so the GPT layout updates properly.
+                    map_slice_cmd = f"diskutil addPartition {parent_disk} FREE OpenCore 0"
                     
                     # We capture diskutil's output to figure out which exact slice number was created (e.g., disk0s3)
                     logging.info(f"- Registering new raw map node entry via: {map_slice_cmd}")
