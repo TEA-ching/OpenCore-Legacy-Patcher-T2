@@ -209,12 +209,13 @@ class BuildOpenCore:
                 self.config["Misc"]["BlessOverride"] = []
             self.config["Misc"]["BlessOverride"].append("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")
     
-    def _mount_efi_partition(self) -> bool:
+   def _mount_efi_partition(self) -> bool:
         """
         Locate and mount the custom 'OpenCore' partition. 
         If missing, extracts the physical slice size via a universal plist,
         shrinks the APFS container to create unallocated free space, and then
-        initializes the FAT32 partition using a safe parent disk regex identifier.
+        initializes the FAT32 partition bounded to exactly 200M to accommodate
+        interleaved multi-boot drive schemes.
         """
         import subprocess
         import logging
@@ -312,8 +313,10 @@ class BuildOpenCore:
                         disk_match = re.match(r"^(disk\d+)", physical_slice)
                         parent_disk = disk_match.group(1) if disk_match else "disk0"
                         
-                        # Step B: Turn that newly created free space into our target FAT32 volume
-                        create_cmd = f"diskutil addPartition {parent_disk} FAT32 OpenCore 0"
+                        # Step B: Turn that newly created free space into our target FAT32 volume.
+                        # Explicitly defining "200M" here prevents diskutil from attempting to swallow
+                        # subsequent Bootcamp/Windows partitions down-drive when hitting multi-boot layouts.
+                        create_cmd = f"diskutil addPartition {parent_disk} FAT32 OpenCore 200M"
                     else:
                         logging.error("- Failed to execute container shrink sequence.")
                         return False
