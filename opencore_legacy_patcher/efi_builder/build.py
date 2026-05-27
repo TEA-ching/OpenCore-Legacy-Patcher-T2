@@ -209,8 +209,6 @@ class BuildOpenCore:
                 self.config["Misc"]["BlessOverride"] = []
             self.config["Misc"]["BlessOverride"].append("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")
     
-    
-    Python
     def _mount_efi_partition(self) -> bool:
         """
         Locate and mount the custom 'OpenCore' partition. 
