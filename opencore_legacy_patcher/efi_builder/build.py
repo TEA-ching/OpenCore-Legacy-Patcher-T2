@@ -272,7 +272,7 @@ class BuildOpenCore:
             if "APFS" in info_root:
                 container_id = self._get_physical_apfs_slice(boot_dev)
                 logging.info(f"- Detected APFS format. Splitting physical target partition {container_id}...")
-                create_cmd = f"diskutil apfs resizeContainer {container_id} 0 FAT32 OpenCore 200M"
+                create_cmd = f"diskutil apfs resizeContainer {container_id} 99% FAT32 OpenCore 200M"
             else:
                 logging.info(f"- Detected legacy format on {boot_dev}. Resizing HFS+ volume...")
                 create_cmd = f"diskutil resizeVolume {boot_dev} 0g FAT32 OpenCore 200M"
