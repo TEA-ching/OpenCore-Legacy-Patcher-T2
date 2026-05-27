@@ -203,61 +203,61 @@ class BuildOpenCore:
                 logging.error(f"Sudo command failed: {stderr_err if stderr_err else e}")
                 return False
 
-        try:
-            # 1. Look for an existing OpenCore partition
-            result = subprocess.check_output(["diskutil", "list"], text=True)
-            for line in result.splitlines():
-                if "OpenCore" in line:
-                    parts = line.strip().split()
-                    if parts:
-                        dev = parts[-1]
-                        if dev.startswith("disk"):
-                            # Check if already mounted
-                            info = subprocess.check_output(["diskutil", "info", dev], text=True)
-                            if "Mounted:               Yes" in info:
-                                logging.info(f"- 'OpenCore' partition ({dev}) is already mounted.")
-                                return True
-                            
-                            # Try to mount it
-                            return run_with_sudo(f"diskutil mount {dev}")
-
-            # 2. Partition not found — Time to create a 200MB slice
-            logging.warning("- 'OpenCore' partition not found. Attempting to create one...")
-
-            # Determine the primary boot disk identifier
-            info_root = subprocess.check_output(["diskutil", "info", "/"], text=True)
-            boot_dev = ""
-            for line in info_root.splitlines():
-                if "Device Identifier:" in line:
-                    boot_dev = line.split()[-1]
-                    break
-            
-            if not boot_dev:
-                logging.error("- Could not pinpoint the primary boot disk identifier.")
+            try:
+                # 1. Look for an existing OpenCore partition
+                result = subprocess.check_output(["diskutil", "list"], text=True)
+                for line in result.splitlines():
+                    if "OpenCore" in line:
+                        parts = line.strip().split()
+                        if parts:
+                            dev = parts[-1]
+                            if dev.startswith("disk"):
+                                # Check if already mounted
+                                info = subprocess.check_output(["diskutil", "info", dev], text=True)
+                                if "Mounted:               Yes" in info:
+                                    logging.info(f"- 'OpenCore' partition ({dev}) is already mounted.")
+                                    return True
+                                
+                                # Try to mount it
+                                return run_with_sudo(f"diskutil mount {dev}")
+    
+                # 2. Partition not found — Time to create a 200MB slice
+                logging.warning("- 'OpenCore' partition not found. Attempting to create one...")
+    
+                # Determine the primary boot disk identifier
+                info_root = subprocess.check_output(["diskutil", "info", "/"], text=True)
+                boot_dev = ""
+                for line in info_root.splitlines():
+                    if "Device Identifier:" in line:
+                        boot_dev = line.split()[-1]
+                        break
+                
+                if not boot_dev:
+                    logging.error("- Could not pinpoint the primary boot disk identifier.")
+                    return False
+    
+                # Determine resizing strategy based on filesystem type
+                if "APFS" in info_root:
+                    container_id = boot_dev if boot_dev.startswith("disk1") else "disk1" 
+                    logging.info(f"- Detected APFS format. Splitting container {container_id}...")
+                    create_cmd = f"diskutil apfs resizeContainer {container_id} 0 FAT32 OpenCore 200M"
+                
+                else:
+                    logging.info(f"- Detected legacy format on {boot_dev}. Resizing HFS+ volume...")
+                    create_cmd = f"diskutil resizeVolume {boot_dev} 0g FAT32 OpenCore 200M"
+    
+                # Execute partition mapping
+                if run_with_sudo(create_cmd):
+                    logging.info("- Partition created successfully. Re-verifying mount status...")
+                    return True
+                else:
+                    logging.error("- Failed to resize drive map and allocate OpenCore partition.")
+                    return False
+    
+            except Exception as e:
+                logging.error("- Critical failure managing disk layouts.")
+                logging.exception(e)
                 return False
-
-            # Determine resizing strategy based on filesystem type
-            if "APFS" in info_root:
-                container_id = boot_dev if boot_dev.startswith("disk1") else "disk1" 
-                logging.info(f"- Detected APFS format. Splitting container {container_id}...")
-                create_cmd = f"diskutil apfs resizeContainer {container_id} 0 FAT32 OpenCore 200M"
-            
-            else:
-                logging.info(f"- Detected legacy format on {boot_dev}. Resizing HFS+ volume...")
-                create_cmd = f"diskutil resizeVolume {boot_dev} 0g FAT32 OpenCore 200M"
-
-            # Execute partition mapping
-            if run_with_sudo(create_cmd):
-                logging.info("- Partition created successfully. Re-verifying mount status...")
-                return True
-            else:
-                logging.error("- Failed to resize drive map and allocate OpenCore partition.")
-                return False
-
-        except Exception as e:
-            logging.error("- Critical failure managing disk layouts.")
-            logging.exception(e)
-            return False
 
     def _generate_base(self) -> None:
         """
