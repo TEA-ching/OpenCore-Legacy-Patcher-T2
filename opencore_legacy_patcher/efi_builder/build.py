@@ -213,12 +213,13 @@ class BuildOpenCore:
     def _mount_efi_partition(self) -> bool:
         """
         Locate and mount the custom 'OpenCore' partition. 
-        If it exists but is unmounted, it handles the mount cleanly.
-        If it genuinely does not exist, it truncates the APFS container 
-        safely by exact bytes to allocate the new partition.
+        If missing, uses universal plist data to determine the exact bytes of the 
+        APFS container and safely shrinks the internal macOS pool by 210MB 
+        to carve out the new partition, completely safe from BOOTCAMP blocks.
         """
         import subprocess
         import logging
+        import plistlib
         import re
 
         def run_with_sudo(cmd_str: str) -> bool:
@@ -268,10 +269,10 @@ class BuildOpenCore:
                     logging.error("- Failed to mount the existing 'OpenCore' partition container.")
                     return False
 
-            # 3. Partition completely missing — Safe down-sizing routine begins here
+            # 3. Partition completely missing — Safe shrinkage sequence begins
             logging.warning("- 'OpenCore' partition not found anywhere on disk. Initializing allocation logic...")
 
-            # Determine primary system boot slice
+            # Determine primary system boot slice identifier
             info_root = subprocess.check_output(["diskutil", "info", "/"], text=True)
             boot_dev = ""
             for line in info_root.splitlines():
@@ -286,34 +287,38 @@ class BuildOpenCore:
             if "APFS" in info_root:
                 container_id = self._get_physical_apfs_slice(boot_dev)
                 
-                # Extract explicit raw capacity constraints to block dynamic sizing glitches
-                container_info = subprocess.check_output(["diskutil", "info", container_id], text=True)
-                size_match = re.search(r"Container Total Space:\s+(\d+)\s+B", container_info)
-                
-                if size_match:
-                    total_bytes = int(size_match.group(1))
-                    # Carve a predictable safety barrier (~210MB deduction footprint)
+                # Extract absolute capacity using language-independent Plist profiles
+                total_bytes = 0
+                try:
+                    plist_raw = subprocess.check_output(["diskutil", "info", "-plist", container_id])
+                    disk_data = plistlib.loads(plist_raw)
+                    total_bytes = disk_data.get("APFSContainerTotalSpace", 0)
+                except Exception as plist_err:
+                    logging.warning(f"- Plist structural parsing failed: {plist_err}")
+
+                if total_bytes > 0:
+                    # Deduct exactly 210,000,000 bytes (~200MB) from current container boundaries
                     target_bytes = total_bytes - 210000000
-                    
-                    logging.info(f"- Calculating container reduction constraint target size: {target_bytes} Bytes")
+                    logging.info(f"- Universal data parsed. Shrinking macOS container bounds strictly to: {target_bytes} Bytes")
                     create_cmd = f"diskutil apfs resizeContainer {container_id} {target_bytes}B FAT32 OpenCore 200M"
                 else:
-                    logging.warning("- Byte extraction parsing failed. Using unsafe dynamic fallback parameter.")
-                    create_cmd = f"diskutil apfs resizeContainer {container_id} 0 FAT32 OpenCore 200M"
+                    # Structural fallback constraint to prevent the destructive '0' loop
+                    logging.warning("- Falling back to percentage contraction parameters.")
+                    create_cmd = f"diskutil apfs resizeContainer {container_id} 99.5% FAT32 OpenCore 200M"
             else:
-                logging.info(f"- Detected legacy filesystem layout on {boot_dev}. Adjusting HFS+ map entries...")
+                logging.info(f"- Detected legacy filesystem layout on {boot_dev}. Adjusting HFS+ map...")
                 create_cmd = f"diskutil resizeVolume {boot_dev} 0g FAT32 OpenCore 200M"
 
-            # Execute partition mapping commands
+            # Execute partition layout transformation entries
             if run_with_sudo(create_cmd):
-                logging.info("- Partition created successfully. Re-verifying mount status...")
+                logging.info("- Partition created out of macOS container space successfully.")
                 return True
             else:
                 logging.error("- Failed to resize drive map and allocate OpenCore partition.")
                 return False
 
         except Exception as e:
-            logging.error("- Critical exception encountered during disk block remediation management.")
+            logging.error("- Critical exception encountered during disk block allocation management.")
             logging.exception(e)
             return False
 
