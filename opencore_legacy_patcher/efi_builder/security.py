@@ -16,7 +16,6 @@ from ..datasets import (
     os_data
 )
 
-
 # T2 Mac models that use Intel UHD 630 and require connector-less
 # ig-platform-id injection to avoid APFS volume group race condition
 # on macOS Tahoe and later. (Coffee Lake GT2)
@@ -36,31 +35,22 @@ _T2_IRIS_PLUS_MODELS = {
 }
 
 # T2 Mac models that use Intel UHD 617 and require graphics injection for stability.
-# NOTE: MacBookPro16,2 is intentionally excluded — it uses Ice Lake GT2 (Iris Plus,
-# device 0x8A52) which is natively supported by macOS Tahoe. Injecting Amber Lake
-# platform-id (0x3EA50009) on Ice Lake hardware causes GPU failures / kernel panics.
 _T2_UHD617_MODELS = {
     "MacBookAir8,1",   # Air 2018
     "MacBookAir8,2",   # Air 2019
     "MacBookAir9,1",   # Air 2020 Intel
     "MacBookPro16,3",  # 13-inch 2020 (2 TB3) — Amber Lake UHD 617
-    # MacBookPro16,2 excluded: Ice Lake GT2 (Iris Plus 0x8A52) — natively supported by Tahoe
 }
 
 # T2 Mac models that do not have an Intel iGPU, or where iGPU injection
 # is not required/recommended.
 _T2_NO_IGPU_MODELS = {
-    # "MacPro7,1",       # Mac Pro 2019 - this model is natively supported by macOS 26 Tahoe
     "iMacPro1,1",      # iMac Pro 2017
-    # "iMac20,1",        # iMac 27-inch 2020 - this model is natively supported by macOS 26 Tahoe
-    # "iMac20,2",        # iMac 27-inch 2020 CTO - this model is natively supported by macOS 26 Tahoe
 }
-
 
 class BuildSecurity:
     """
     Build Library for Security Patch Support
-
     Invoke from build.py
     """
 
@@ -86,9 +76,6 @@ class BuildSecurity:
         """
         Appends boot-arg tokens to an NVRAM string variable, only for
         tokens not already present.
-
-        Uses token-based deduplication (split on whitespace) to avoid
-        substring false-positives.
         """
         if "NVRAM" not in self.config:
             self.config["NVRAM"] = {"Add": {}}
@@ -104,7 +91,7 @@ class BuildSecurity:
 
         tokens_to_add = [t for t in new_tokens if t not in existing_tokens]
         if not tokens_to_add:
-            return  # all tokens already present
+            return
 
         if current_value.strip():
             self.config["NVRAM"]["Add"][uuid][key] = (
@@ -320,7 +307,7 @@ class BuildSecurity:
                 "MinKernel": "25.0.0"
             })
 
-        # 3. Patch AppleSEPManager to change panic to return
+        # 3. Patch AppleSEPManager panic to return
         if not patch_exists("Patch AppleSEPManager panic to return (Tahoe fix)"):
             kernel_patches.append({
                 "Arch": "x86_64",
