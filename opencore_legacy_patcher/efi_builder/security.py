@@ -48,6 +48,16 @@ _T2_NO_IGPU_MODELS = {
     "iMacPro1,1",      # iMac Pro 2017
 }
 
+_T2_TOUCH_BAR_MODELS = {
+    "MacBookPro15,2",  # 13-inch 2018 (4 TB3)
+    "MacBookPro15,4",  # 13-inch 2019 (2 TB3)
+    "MacBookPro16,3",  # 13-inch 2020 (2 TB3) — Amber Lake UHD 617
+    "MacBookPro15,1",  # 15-inch 2018 (UHD630 + Radeon)
+    "MacBookPro15,3",  # 15-inch 2019 (UHD630 + Radeon)
+    "MacBookPro16,1",  # 16-inch 2019 (UHD630 + Radeon)
+    "MacBookPro16,4",  # 16-inch 2019 CTO (UHD630 + Radeon)
+}
+
 class BuildSecurity:
     """
     Build Library for Security Patch Support
@@ -330,18 +340,18 @@ class BuildSecurity:
                 "Replace": binascii.unhexlify("4183BC24F801000000EB"),
                 "MinKernel": "25.0.0"
             })
-
-        # 5. Patch AppleTouchBarHIDEventDriver
-        if not patch_exists("Patch AppleTouchBarHIDEventDriver (Tahoe fix)"):
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Comment": "Patch AppleTouchBarHIDEventDriver (Tahoe fix)",
-                "Enabled": True,
-                "Identifier": "com.apple.driver.AppleTouchBarHIDEventDriver",
-                "Find": binascii.unhexlify("4883C4085B415C415D415E415F5DC3"),
-                "Replace": binascii.unhexlify("31C090905B415C415D415E415F5DC3"),
-                "MinKernel": "25.0.0"
-            })
+        if self.model in _T2_TOUCH_BAR_MODELS:
+            # 5. Patch AppleTouchBarHIDEventDriver
+            if not patch_exists("Patch AppleTouchBarHIDEventDriver (Tahoe fix)"):
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Comment": "Patch AppleTouchBarHIDEventDriver (Tahoe fix)",
+                    "Enabled": True,
+                    "Identifier": "com.apple.driver.AppleTouchBarHIDEventDriver",
+                    "Find": binascii.unhexlify("4883C4085B415C415D415E415F5DC3"),
+                    "Replace": binascii.unhexlify("31C090905B415C415D415E415F5DC3"),
+                    "MinKernel": "25.0.0"
+                })
 
     # ------------------------------------------------------------------
     # Main build entry point
