@@ -322,7 +322,7 @@ class BuildSecurity:
             kernel_patches.append({
                 "Arch": "x86_64",
                 "Comment": "Patch AppleSEPManager panic to return (Tahoe fix)",
-                "Enabled": True,
+                "Enabled": False, # it reaplaces the 4883BFB003000000754F binary of the AppleSEPManager driver twice with 2 different values, causing kernel panics
                 "Identifier": "com.apple.driver.AppleSEPManager",
                 "Find": binascii.unhexlify("4883BFB003000000754F"),
                 "Replace": binascii.unhexlify("31C0C390909090909090"),
