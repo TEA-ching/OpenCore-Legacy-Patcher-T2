@@ -84,7 +84,7 @@ class BuildFrame(wx.Frame):
         dlg.ShowModal()
         dlg.Destroy()
 
-    def copy_to_clipboard(self) -> None:
+    def copy_to_clipboard():
         # 1. Get the error log
         log_content = self.text_box.GetValue().splitlines()[-15:]
         error_text = "Analyze this OpenCore build error: " + " ".join(log_content)
@@ -108,7 +108,7 @@ class BuildFrame(wx.Frame):
         )
         
     def on_ask_gemini(self) -> None:
-        copy_to_clipboard(self)
+        copy_to_clipboard()
         dlg = wx.Dialog(self, title="Ask Gemini Analysis", size=(800, 600))
         sizer = wx.BoxSizer(wx.VERTICAL)
         
