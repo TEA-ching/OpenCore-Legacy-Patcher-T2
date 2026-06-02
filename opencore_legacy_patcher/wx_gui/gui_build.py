@@ -94,21 +94,24 @@ class BuildFrame(wx.Frame):
         # 1. Get the error log
         log_content = self.text_box.GetValue().splitlines()[-15:]
         error_text = "Analyze this OpenCore build error: " + " ".join(log_content)
+        """Copies the error to the clipboard and opens Gemini for the user."""
+        # 1. Capture the log
+        log_content = self.text_box.GetValue().splitlines()[-15:]
+        error_text = "\n".join(log_content)
         
-        # 2. Wait for page load before injecting JS
-        def on_load(event):
-            # This script finds the Gemini input box (class/aria label may vary)
-            # and triggers an input event.
-            js_script = f"""
-                var input = document.querySelector('div[contenteditable="true"]');
-                if (input) {{
-                    input.innerText = '{error_text.replace("'", "\\'")}';
-                    input.dispatchEvent(new Event('input', {{bubbles: true}}));
-                    // Click the submit button (adjust selector if needed)
-                    document.querySelector('button[aria-label*="Send"]').click();
-                }}
-            """
-            webview.RunScript(js_script)
+        # 2. Copy to system clipboard
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(wx.TextDataObject(error_text))
+            wx.TheClipboard.Close()
+            
+        # 3. Inform the user what just happened
+        wx.MessageBox(
+            "The error log has been copied to your clipboard.\n\n"
+            "1. Gemini will now open in a new window.\n"
+            "2. Simply paste (Cmd+V) your error log into the chat box.",
+            "Ask Gemini", 
+            wx.OK | wx.ICON_INFORMATION
+        )
     
         webview.Bind(wx.html2.EVT_WEBVIEW_LOADED, on_load)
         webview.LoadURL("https://gemini.google.com/")
