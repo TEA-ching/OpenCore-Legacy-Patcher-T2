@@ -107,30 +107,31 @@ class BuildSecurity:
 
     def _apply_t2_graphics_injection(self) -> None:
         """Inject graphics DeviceProperties for supported Intel iGPU T2 Macs."""
-        if self.model not in _T2_UHD630_MODELS:
-            logging.info(f"- Skipping graphics injection for {self.model}")
+        if self.model in _T2_UHD630_MODELS:
+             logging.info(f"- T2 {self.model} detected: Injecting connector-less UHD Graphics 630 properties")
+        
+            if "DeviceProperties" not in self.config:
+                self.config["DeviceProperties"] = {"Add": {}}
+            if "Add" not in self.config["DeviceProperties"]:
+                self.config["DeviceProperties"]["Add"] = {}
+            
+            graphics_path = "PciRoot(0x0)/Pci(0x2,0x0)"
+            if graphics_path not in self.config["DeviceProperties"]["Add"]:
+                self.config["DeviceProperties"]["Add"][graphics_path] = {}
+            
+            gfx = self.config["DeviceProperties"]["Add"][graphics_path]
+            
+            # Fixed Byte Alignment to structural Little Endian for OpenCore parsing correctness
+            gfx["AAPL,ig-platform-id"]     = binascii.unhexlify("06009B3E")  # 0x3E9B0006
+            gfx["device-id"]               = binascii.unhexlify("9B3E0000")  # 0x3E9B0000
+            gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
+            
+            logging.info("  > Graphics DeviceProperties injection complete (Little Endian verified)")
+        else:
+            logging.info(f"- Skipping Intel UHD Graphics 630 injection for {self.model}")
             return
         
-        logging.info(f"- T2 {self.model} detected: Injecting connector-less UHD Graphics 630 properties")
-        
-        if "DeviceProperties" not in self.config:
-            self.config["DeviceProperties"] = {"Add": {}}
-        if "Add" not in self.config["DeviceProperties"]:
-            self.config["DeviceProperties"]["Add"] = {}
-        
-        graphics_path = "PciRoot(0x0)/Pci(0x2,0x0)"
-        if graphics_path not in self.config["DeviceProperties"]["Add"]:
-            self.config["DeviceProperties"]["Add"][graphics_path] = {}
-        
-        gfx = self.config["DeviceProperties"]["Add"][graphics_path]
-        
-        # Fixed Byte Alignment to structural Little Endian for OpenCore parsing correctness
-        gfx["AAPL,ig-platform-id"]     = binascii.unhexlify("06009B3E")  # 0x3E9B0006
-        gfx["device-id"]               = binascii.unhexlify("9B3E0000")  # 0x3E9B0000
-        gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
-        
-        logging.info("  > Graphics DeviceProperties injection complete (Little Endian verified)")
-
+       
     def _apply_t2_memory_descriptor_overrides(self, apple_nvram_uuid: str) -> None:
         """Force memory descriptor overrides for T2 Macs to resolve system panics."""
         logging.info("- Applying mandatory T2 memory descriptor overrides (T2 ONLY)")
