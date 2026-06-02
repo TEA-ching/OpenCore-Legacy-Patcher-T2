@@ -409,7 +409,6 @@ class BuildMiscellaneous:
 
     def _t2_handling(self) -> None:
         """T2 Security Chip Handler."""
-        logging.info("---OpenCore Legacy Patcher T2---")
         if not self._is_t2_mac():
             return
 
@@ -424,6 +423,7 @@ class BuildMiscellaneous:
         ]:
             obj = builder.get_kext_by_bundle_path(kext)
             if not obj or obj.get("Enabled") is not True:
+                logging.info("---OpenCore Legacy Patcher T2---")
                 logging.info(f"- Enabling {kext}")
                 builder.enable_kext(kext, ver, path)
 
