@@ -52,6 +52,50 @@ class BuildFrame(wx.Frame):
         self._invoke_build()
 
 
+    def on_build_failure(self) -> None:
+        """
+        Custom error dialog that provides a direct 'Ask Gemini' bridge 
+        for debugging complex build errors.
+        """
+        dlg = wx.Dialog(self, title="Build Error", size=(450, 250))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Build error explanation
+        msg = wx.StaticText(dlg, label="An error occurred while building OpenCore.\n\n"
+                                       "If you are unsure how to fix this, you can ask \n"
+                                       "Gemini for a technical analysis of your build log.")
+        sizer.Add(msg, 0, wx.ALL | wx.CENTER, 20)
+
+        # Button Row: Ask Gemini | View Log | Close
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        gemini_btn = wx.Button(dlg, label="Ask Gemini")
+        gemini_btn.Bind(wx.EVT_BUTTON, lambda e: self.on_ask_gemini())
+        
+        close_btn = wx.Button(dlg, label="Close", style=wx.ID_CANCEL)
+        
+        btn_sizer.Add(gemini_btn, 0, wx.ALL, 5)
+        btn_sizer.Add(close_btn, 0, wx.ALL, 5)
+        
+        sizer.Add(btn_sizer, 0, wx.CENTER)
+        dlg.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+
+    def on_ask_gemini(self) -> None:
+        """Constructs a search query with log context and opens Gemini."""
+        # Grab the last 10 lines of the log to provide context to Gemini
+        log_content = self.text_box.GetValue().splitlines()[-10:]
+        context = " ".join(log_content)
+        
+        # URL-encoded query
+        import urllib.parse
+        query = f"I am getting this OpenCore build error: {context}"
+        url = f"https://gemini.google.com/?q={urllib.parse.quote(query)}"
+        
+        webbrowser.open(url)
+    
     def _generate_elements(self, frame: wx.Frame = None) -> None:
         """
         Generate UI elements for build frame
@@ -113,13 +157,7 @@ class BuildFrame(wx.Frame):
 
         # Check if config.plist was built
         if self.build_successful is False:
-            dialog = wx.MessageDialog(
-                parent=self,
-                message="An error occurred while building OpenCore",
-                caption="Error building OpenCore",
-                style=wx.OK | wx.ICON_ERROR
-            )
-            dialog.ShowModal()
+            self.on_build_failure()
             return
         else:
             dialog = wx.MessageDialog(
