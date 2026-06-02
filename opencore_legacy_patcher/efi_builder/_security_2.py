@@ -110,23 +110,17 @@ class BuildSecurity:
         if self.model in _T2_UHD630_MODELS:
             # Call the dynamic discovery method
             graphics_path = self._get_graphics_device_properties_path()
-        
             logging.info(f"- T2 {self.model} detected: Injecting connector-less UHD Graphics 630 properties at {graphics_path}")
-        
             # Ensure the required configuration tree exists
             self.config.setdefault("DeviceProperties", {}).setdefault("Add", {})
-            
             # Apply injection to the resolved dynamic path
             if graphics_path not in self.config["DeviceProperties"]["Add"]:
                 self.config["DeviceProperties"]["Add"][graphics_path] = {}
-            
             gfx = self.config["DeviceProperties"]["Add"][graphics_path]
-        
             # Inject properties
             gfx["AAPL,ig-platform-id"]      = binascii.unhexlify("06009B3E")
             gfx["device-id"]                = binascii.unhexlify("9B3E0000")
             gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
-        
             logging.info("  > Graphics DeviceProperties injection complete (Little Endian verified)")
         else:
             logging.info(f"- Skipping Intel UHD Graphics 630 injection for {self.model}")
