@@ -75,7 +75,7 @@ class BuildFrame(wx.Frame):
         gemini_btn = wx.Button(dlg, label="Ask Gemini")
         gemini_btn.Bind(wx.EVT_BUTTON, lambda e: self.on_ask_gemini())
         
-        close_btn = wx.Button(dlg, label="Close", style=wx.ID_CANCEL)
+        close_btn = wx.Button(dlg, wx.ID_CANCEL, label="Close")
         
         btn_sizer.Add(gemini_btn, 0, wx.ALL, 5)
         btn_sizer.Add(close_btn, 0, wx.ALL, 5)
