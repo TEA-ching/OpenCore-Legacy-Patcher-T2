@@ -212,38 +212,44 @@ class BuildOpenCore:
         logging.info("- Adding config.plist for OpenCore")
         shutil.copy(self.constants.plist_template, self.constants.oc_folder)
         self.config = plistlib.load(Path(self.constants.plist_path).open("rb"))
-    
+
     def _save_config(self) -> None:
-        """Save config.plist to disk with resource safety."""
+        """
+        Save config.plist to disk with structural validation to prevent
+        plistlib type errors.
+        """
         
-        # 1. Ensure the directory exists before opening
+        def find_bad_key(obj, path="root"):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if not isinstance(k, str):
+                        # This log entry will pinpoint exactly where the corruption is
+                        logging.error(f"!!! NON-STRING KEY FOUND !!!")
+                        logging.error(f"    Location: {path}")
+                        logging.error(f"    Offending Key: {k} (Type: {type(k)})")
+                    find_bad_key(v, f"{path}/{k}")
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    find_bad_key(item, f"{path}[{i}]")
+
+        # Run the diagnostic scan before attempting to save
+        find_bad_key(self.config)
+
+        # Proceed to save
         try:
-            output_path = Path(self.constants.plist_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            logging.error(f"Dictionary does not exist: {e}")
-            logging.exception("Stack Trace:")
-            raise # Re-raise or handle gracefully
-        
-        try:
-            # 2. Use a context manager to ensure the file is flushed and closed
-            with output_path.open("wb") as f:
-                plistlib.dump(self.config, f, sort_keys=True)
-            logging.info(f"Successfully saved configuration to {output_path}")
+            # Ensure the directory exists
+            Path(self.constants.plist_path).parent.mkdir(parents=True, exist_ok=True)
             
-        except TypeError as e:
-            # 3. Specifically catch the 'keys must be strings' error
-            logging.error("CRITICAL: Failed to save config.plist due to non-string keys.")
-            logging.error(f"Error details: {e}")
-            logging.exception("Stack Trace:")
-            # Here, you would trigger your diagnostic tool to print the dictionary keys
-            raise  # Re-raise or handle gracefully
-        
+            with Path(self.constants.plist_path).open("wb") as f:
+                plistlib.dump(self.config, f, sort_keys=True)
+            logging.info("Successfully saved config.plist")
+            
         except Exception as e:
             logging.error(f"Function Error while saving config: {e}")
             logging.exception("Stack Trace:")
-            sys.exit(3)
-
+            # Use sys.exit if you want to stop the build on failure
+            sys.exit(3)    
+    
     def _set_revision(self) -> None:
         """
         Set revision information in config.plist
