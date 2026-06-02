@@ -8,6 +8,7 @@ import threading
 import traceback
 import time
 import webbrowser
+import wx.html2
 
 from .. import constants
 
@@ -84,17 +85,27 @@ class BuildFrame(wx.Frame):
 
 
     def on_ask_gemini(self) -> None:
-        """Constructs a search query with log context and opens Gemini."""
-        # Grab the last 10 lines of the log to provide context to Gemini
+        """Opens a native WebView dialog embedded in the app."""
+        # 1. Create a container dialog
+        dlg = wx.Dialog(self, title="Ask Gemini", size=(800, 600))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+    
+        # 2. Initialize WebView
+        # OCLP on macOS will use WebKit automatically
+        webview = wx.html2.WebView.New(dlg)
+        
+        # 3. Contextual URL (The query includes the error log)
         log_content = self.text_box.GetValue().splitlines()[-10:]
-        context = " ".join(log_content)
+        context = urllib.parse.quote(" ".join(log_content))
+        url = f"https://gemini.google.com/?q=OpenCore-build-error:{context}"
         
-        # URL-encoded query
-        import urllib.parse
-        query = f"I am getting this OpenCore build error: {context}"
-        url = f"https://gemini.google.com/?q={urllib.parse.quote(query)}"
+        webview.LoadURL(url)
         
-        webbrowser.open(url)
+        # 4. Layout
+        sizer.Add(webview, 1, wx.EXPAND)
+        dlg.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
     
     def _generate_elements(self, frame: wx.Frame = None) -> None:
         """
