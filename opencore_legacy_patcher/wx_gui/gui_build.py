@@ -86,23 +86,33 @@ class BuildFrame(wx.Frame):
 
 
     def on_ask_gemini(self) -> None:
-        """Opens a native WebView dialog embedded in the app."""
-        # 1. Create a container dialog
-        dlg = wx.Dialog(self, title="Ask Gemini", size=(800, 600))
+        dlg = wx.Dialog(self, title="Ask Gemini Analysis", size=(800, 600))
         sizer = wx.BoxSizer(wx.VERTICAL)
-    
-        # 2. Initialize WebView
-        # OCLP on macOS will use WebKit automatically
+        
         webview = wx.html2.WebView.New(dlg)
         
-        # 3. Contextual URL (The query includes the error log)
-        log_content = self.text_box.GetValue().splitlines()[-10:]
-        context = urllib.parse.quote(" ".join(log_content))
-        url = f"https://gemini.google.com/?q=OpenCore-build-error:{context}"
+        # 1. Get the error log
+        log_content = self.text_box.GetValue().splitlines()[-15:]
+        error_text = "Analyze this OpenCore build error: " + " ".join(log_content)
         
-        webview.LoadURL(url)
+        # 2. Wait for page load before injecting JS
+        def on_load(event):
+            # This script finds the Gemini input box (class/aria label may vary)
+            # and triggers an input event.
+            js_script = f"""
+                var input = document.querySelector('div[contenteditable="true"]');
+                if (input) {{
+                    input.innerText = '{error_text.replace("'", "\\'")}';
+                    input.dispatchEvent(new Event('input', {{bubbles: true}}));
+                    // Click the submit button (adjust selector if needed)
+                    document.querySelector('button[aria-label*="Send"]').click();
+                }}
+            """
+            webview.RunScript(js_script)
+    
+        webview.Bind(wx.html2.EVT_WEBVIEW_LOADED, on_load)
+        webview.LoadURL("https://gemini.google.com/")
         
-        # 4. Layout
         sizer.Add(webview, 1, wx.EXPAND)
         dlg.SetSizer(sizer)
         dlg.ShowModal()
