@@ -283,7 +283,7 @@ class BuildSecurity:
 
         self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
         self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
-        self.config["Misc"]["Security"]["ApECID"]          = 0
+        self.config["Misc"]["Security"]["ApECID"]          = int(0)
 
         if self.model == "MacBookPro15,1":
             logging.info("  > Forcing Native SMBIOS (MacBookPro15,1) to prevent Trust Cache mismatch")
