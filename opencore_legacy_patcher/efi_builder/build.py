@@ -62,6 +62,8 @@ class BuildOpenCore:
             self._build_opencore()
         except Exception as e:
             logging.error(f"Function Error: {e}")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
             sys.exit(3)
 
     
@@ -223,6 +225,8 @@ class BuildOpenCore:
         )
         except Exception as e:
             logging.error(f"Function Error while saving config: {e}")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
             sys.exit(3)
 
     def _set_revision(self) -> None:
@@ -258,6 +262,7 @@ class BuildOpenCore:
         # Validate type to avoid malicious plist poisoning
         if not isinstance(guid, dict):
             logging.error(f"NVRAM GUID {guid_key} is not a dictionary — refusing to write metadata")
+            logging.exception("Stack Trace:") # This prints the full technical error
             return
     
         # --- Safe writes ---
