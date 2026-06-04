@@ -297,9 +297,11 @@ class BuildSecurity:
         self._apply_t2_amfi_boot_args(apple_nvram_uuid)
         self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 -v keepsyms=1 nvme_shutdown_timestamp=0")
 
-        if is_tahoe_host or is_tahoe_target:
-            logging.info("  > Targeted or host OS is Tahoe (or later) — appending mandatory bypass parameters")
+        if self.constants.detected_os >= os_data.os_data.tahoe:
+            logging.info("Injecting cryptex=0 cs_allow_invalid=1 for macOS 26 Tahoe")
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
+        else:
+            logging.info("Skipping injecting cryptex=0 cs_allow_invalid=1 since you run macOS 15 Sequoia or older")
 
     def _apply_t2_kernel_patches_tahoe(self) -> None:
         """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
