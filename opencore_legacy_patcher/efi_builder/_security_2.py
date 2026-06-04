@@ -4,6 +4,7 @@ security.py: Class for handling macOS Security Patches, invocation from build.py
 
 import logging
 import binascii
+import sys
 from typing import Any
 
 from . import support
