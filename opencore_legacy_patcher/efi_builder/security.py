@@ -16,6 +16,7 @@ from ..datasets import (
     smbios_data,
     os_data
 )
+is_tahoe_target=False
 
 # T2 Mac models that use Intel UHD 630 and require connector-less
 # ig-platform-id injection to avoid APFS volume group race condition
@@ -298,12 +299,50 @@ class BuildSecurity:
         self._apply_t2_amfi_boot_args(apple_nvram_uuid)
         self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 -v keepsyms=1 nvme_shutdown_timestamp=0")
 
-        if self.constants.detected_os >= os_data.os_data.tahoe:
+        if self.constants.detected_os >= os_data.os_data.tahoe
+            is_tahoe_target=True
+            self.apply_cryptex_patches()
+        elif is_tahoe_target=False and self.constants.detected_os >= os_data.os_data.mojave and self.constants.detected_os < os_data.os_data.tahoe
+            logging.info("Popping up a popup to ask if the OS target is Tahoe or not since we couldn't identify...")
+            self.unknown_target()
+        else:
+            logging.error("Upgrading from macOS High Sierra to Tahoe is not possible. Please, upgrade to macOS Sequoia first. We'll skip any macOS 26-only patches.")
+
+    def _unknown_target(self) -> None:
+        """
+        Custom error dialog that provides a direct 'Ask Gemini' bridge 
+        for debugging complex build errors.
+        """
+        dlg = wx.Dialog(self, title="Unknown Target", size=(450, 250))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Build error explanation
+        msg = wx.StaticText(dlg, label="What version would you like to run on your unsupported T2 Mac?\n\n")
+        sizer.Add(msg, 0, wx.ALL | wx.CENTER, 20)
+
+        # Button Row: Ask Gemini | View Log | Close
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        macOS26_btn = wx.Button(dlg, label="macOS 26 Tahoe or newer")
+        macOS26_btn.Bind(wx.EVT_BUTTON, lambda e: self.macOS26Tahoe())
+        macOS15_btnwx.Button(dlg, label="macOS 15 Sequoia or older")
+        macOS15_btn.Bind(wx.EVT_BUTTON, lambda e: self.macOS15Sequoia())
+        
+        
+        btn_sizer.Add(macOS26_btn, 0, wx.ALL, 5)
+        btn_sizer.Add(close_btn, 0, wx.ALL, 5)
+        
+        sizer.Add(btn_sizer, 0, wx.CENTER)
+        dlg.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def _apply_cryptex_patches(self):
+        if is_tahoe_target=True:
             logging.info("Injecting cryptex=0 cs_allow_invalid=1 for macOS 26 Tahoe")
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
         else:
-            logging.info("Skipping injecting cryptex=0 cs_allow_invalid=1 since you run macOS 15 Sequoia or older")
-
+            return
     
     def _apply_t2_kernel_patches_tahoe(self) -> None:
         """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
