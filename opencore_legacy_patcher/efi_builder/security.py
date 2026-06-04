@@ -303,8 +303,8 @@ class BuildSecurity:
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
         else:
             logging.info("Skipping injecting cryptex=0 cs_allow_invalid=1 since you run macOS 15 Sequoia or older")
-            sys.exit(3) #to understand the behavior and catch why it doesn't inject this patch
 
+    
     def _apply_t2_kernel_patches_tahoe(self) -> None:
         """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
         if not self._is_t2_mac():
