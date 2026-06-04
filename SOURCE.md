@@ -4,10 +4,10 @@ OpenCore Legacy Patcher at its core is a Python-based GUI/CLI-based application.
 
 For developers wishing to validate mainline changes, you may use this link: [GUI (Graphical Based App)](https://nightly.link/dortania/OpenCore-Legacy-Patcher/workflows/build-app-wxpython/main/OpenCore-Patcher.pkg.zip)
 
-* **Warning**: Nightly builds (untagged builds built from the latest commit) are actively developed OpenCore Legacy Patcher builds. These builds have not been tested, are not guaranteed to work, and are not guaranteed to be safe. Do not use nightlies without a good reason to do so, and do not use them on your main machine. Additionally, these binaries should not be used without first consulting the [CHANGELOG](./CHANGELOG.md).
+* **Warning**:Untagged builds built from the latest commit are actively developed OpenCore Legacy Patcher T2 builds. These builds have not been tested, are not guaranteed to work, and are not guaranteed to be safe. They may have bugs that remain to be tested. Do not use untagged builds without a good reason to do so, and do not use them on your main machine. Additionally, these binaries should not be used without first consulting the [CHANGELOG](./CHANGELOG.md).
 
   **Do not share _any_ links to these binaries** in forums; please link to **this document only**.
-  * Additionally, do not reupload these binaries or download binaries from other sites. Using binaries from untrusted sources is a security issue, as they may have been tampered with.
+  * Additionally, do not reupload these binaries or download binaries from other sites. Using binaries from untrusted sources is a security issue, as they may have malware or exploitable vulnerabilities that are patched long time ago. 
 * Users running new builds of the project without understanding what has changed and the implications of installing software under active development are at a higher risk of bricking their installation as they do not read any warnings provided in the CHANGELOG. We wish to minimize these situations as much as possible.
 
 ## Getting Started
