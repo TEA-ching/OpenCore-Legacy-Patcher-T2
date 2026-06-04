@@ -266,14 +266,19 @@ class BuildSecurity:
         else:
             logging.error(f"FATAL: Model {self.model} lacks specific GPU patch data.")
             return
-
-        # ── Common framebuffer patches (all T2 iGPU models) ──────────────
-        gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
-        gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
-        gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  # Unused/connector-less
-        gfx["framebuffer-stolenmem"]    = binascii.unhexlify("00003001")  # 19 MB
-        gfx["framebuffer-fbmem"]        = binascii.unhexlify("00009000")  # 9 MB
-        logging.info("  > T2 iGPU connector-less injection complete")
+        try:
+             # ── Common framebuffer patches (all T2 iGPU models) ──────────────
+            gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
+            gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
+            gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  # Unused/connector-less
+            gfx["framebuffer-stolenmem"]    = binascii.unhexlify("00003001")  # 19 MB
+            gfx["framebuffer-fbmem"]        = binascii.unhexlify("00009000")  # 9 MB
+            logging.info("  > T2 iGPU connector-less injection complete")
+        except Exception as e:
+            logging.error(f"Whoops, injecting common framebuffer patches for {self.model} failed because of the following error:")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
 
     def _apply_t2_memory_descriptor_overrides(self, apple_nvram_uuid: str) -> None:
         """Apply mandatory security overrides required for T2 Macs to boot."""
@@ -292,7 +297,8 @@ class BuildSecurity:
         self._apply_t2_amfi_boot_args(apple_nvram_uuid)
         self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 -v keepsyms=1 nvme_shutdown_timestamp=0")
 
-        if self.constants.detected_os >= os_data.os_data.tahoe:
+        if is_tahoe_host or is_tahoe_target:
+            logging.info("  > Targeted or host OS is Tahoe (or later) — appending mandatory bypass parameters")
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
 
     def _apply_t2_kernel_patches_tahoe(self) -> None:
