@@ -307,9 +307,20 @@ class BuildSecurity:
 
     def _unknown_target(self, apple_nvram_uuid: str) -> None:
         """
-        Custom error dialog that provides manual OS mapping.
+        Safely maps the target OS version using a GUI Dialog if a wx.App loop 
+        is running, or falls back to an interactive CLI prompt if headless.
         """
-        # wx requires an active App lifecycle frame context or None wrapper
+        # Check if wxPython has a valid running application event loop context
+        app = wx.GetApp()
+        if app and app.IsMainLoopRunning():
+            logging.info("  > Active GUI environment detected. Spawning selection dialog.")
+            self._unknown_target_gui(apple_nvram_uuid)
+        else:
+            logging.info("  > Headless/CLI environment detected. Falling back to terminal input.")
+            self._unknown_target_cli(apple_nvram_uuid)
+
+    def _unknown_target_gui(self, apple_nvram_uuid: str) -> None:
+        """Handles target selection via a wxWidgets modal dialog."""
         dlg = wx.Dialog(None, title="Unknown Target", size=(450, 250))
         sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -319,10 +330,10 @@ class BuildSecurity:
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         macOS26_btn = wx.Button(dlg, label="macOS 26 Tahoe or newer")
-        macOS26_btn.Bind(wx.EVT_BUTTON, lambda e: self._macOS26Tahoe(dlg, apple_nvram_uuid))
+        macOS26_btn.Bind(wx.EVT_BUTTON, lambda e: self._handle_selection(dlg, apple_nvram_uuid, is_tahoe_target=True))
         
         macOS15_btn = wx.Button(dlg, label="macOS 15 Sequoia or older")
-        macOS15_btn.Bind(wx.EVT_BUTTON, lambda e: self._macOS15Sequoia(dlg))
+        macOS15_btn.Bind(wx.EVT_BUTTON, lambda e: self._handle_selection(dlg, apple_nvram_uuid, is_tahoe_target=False))
         
         btn_sizer.Add(macOS26_btn, 0, wx.ALL, 5)
         btn_sizer.Add(macOS15_btn, 0, wx.ALL, 5)
@@ -331,6 +342,46 @@ class BuildSecurity:
         dlg.SetSizer(sizer)
         dlg.ShowModal()
         dlg.Destroy()
+
+    def _unknown_target_cli(self, apple_nvram_uuid: str) -> None:
+        """Handles target selection via interactive standard input."""
+        print("\n" + "="*60)
+        print(" [!] OS Target Detection Ambiguity")
+        print(" Your target OS version could not be automatically determined.")
+        print(" Please choose an operating system target package:")
+        print("   [1] macOS 26 Tahoe or newer (Requires Cryptex & USB Handshake Patches)")
+        print("   [2] macOS 15 Sequoia or older")
+        print("="*60)
+
+        while True:
+            try:
+                choice = input("Select an option (1 or 2): ").strip()
+                if choice == "1":
+                    logging.info("CLI Choice: macOS 26 Tahoe target configuration applied.")
+                    self.is_tahoe_target = True
+                    self._apply_cryptex_patches(apple_nvram_uuid)
+                    break
+                elif choice == "2":
+                    logging.info("CLI Choice: macOS 15 Sequoia target target configuration applied.")
+                    self.is_tahoe_target = False
+                    break
+                else:
+                    print("Invalid choice. Please enter 1 or 2.")
+            except (KeyboardInterrupt, EOFError):
+                logging.error("User aborted compilation during target choice selection loop.")
+                sys.exit(1)
+
+    def _handle_selection(self, dialog: wx.Dialog, apple_nvram_uuid: str, target_is_tahoe: bool) -> None:
+        """Consolidated callback processor for wxButton events."""
+        if target_is_tahoe:
+            logging.info("GUI Selection: macOS 26 Tahoe target path validated.")
+            self.is_tahoe_target = True
+            self._apply_cryptex_patches(apple_nvram_uuid)
+            dialog.EndModal(wx.ID_OK)
+        else:
+            logging.info("GUI Selection: Skipping Tahoe-specific patches (Sequoia or older).")
+            self.is_tahoe_target = False
+            dialog.EndModal(wx.ID_CANCEL)
 
     def _macOS15Sequoia(self, dialog: wx.Dialog) -> None:
         logging.info("Skip injecting cryptex=0 cs_allow_invalid=1 for macOS 15 Sequoia or older...")
