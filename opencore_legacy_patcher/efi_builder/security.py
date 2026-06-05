@@ -5,6 +5,7 @@ security.py: Class for handling macOS Security Patches, invocation from build.py
 import logging
 import binascii
 import sys
+import wx
 
 from . import support
 from .. import constants
@@ -16,7 +17,6 @@ from ..datasets import (
     smbios_data,
     os_data
 )
-is_tahoe_target=False
 
 # T2 Mac models that use Intel UHD 630 and require connector-less
 # ig-platform-id injection to avoid APFS volume group race condition
@@ -41,7 +41,7 @@ _T2_LOW_POWER_MODELS = {
     "MacBookAir8,1",   # Air 2018
     "MacBookAir8,2",   # Air 2019
     "MacBookAir9,1",   # Air 2020 Intel
-    "MacBookPro16,3",  # 13-inch 2020 (2 TB3) — Ice Lake LP / Custom Framebuffer target
+    "MacBookPro16,3",  # 13-inch 2020 (2 TB3)
 }
 
 # T2 Mac models that do not have an Intel iGPU, or where iGPU injection
@@ -71,6 +71,7 @@ class BuildSecurity:
         self.config: dict = config
         self.constants: constants.Constants = global_constants
         self.computer: device_probe.Computer = self.constants.computer
+        self.is_tahoe_target: bool = False
 
         self._build()
 
@@ -245,7 +246,6 @@ class BuildSecurity:
             logging.info(f"- {self.model}: Injecting connector-less Intel UHD Graphics 617 and Amber Lake DeviceProperties (Tahoe fix)")
             gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
             gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
-
             self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxgl=1 igfxmetal=1")
             logging.info("  > Added igfxgl=1 igfxmetal=1 (LP Display sync fix)")
 
@@ -253,17 +253,19 @@ class BuildSecurity:
             logging.info(f"- {self.model}: Injecting connector-less Iris Plus DeviceProperties (Tahoe fix)")
             gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
             gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxgl=1 igfxmetal=1")
+            logging.info("  > Added igfxgl=1 igfxmetal=1 (LP Display sync fix)")
+
 
         elif self.model in _T2_UHD630_MODELS:
             logging.info(f"- {self.model}: Injecting connector-less UHD630 DeviceProperties (Tahoe fix)")
             gfx["AAPL,ig-platform-id"] = binascii.unhexlify("06009B3E")  # 0x3E9B0006 LE
             gfx["device-id"]           = binascii.unhexlify("9B3E0000")  # 0x3E9B0000 LE
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxnoredir=1")
         else:
             logging.error(f"FATAL: Model {self.model} lacks specific GPU patch data.")
             return
         try:
-             # ── Common framebuffer patches (all T2 iGPU models) ──────────────
+            # ── Common framebuffer patches (all T2 iGPU models) ──────────────
             gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
             gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
             gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  # Unused/connector-less
@@ -272,7 +274,7 @@ class BuildSecurity:
             logging.info("  > T2 iGPU connector-less injection complete")
         except Exception as e:
             logging.error(f"Whoops, injecting common framebuffer patches for {self.model} failed because of the following error:")
-            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.exception("Stack Trace:")
             logging.info("Please try again later.")
             sys.exit(3)
 
@@ -294,35 +296,33 @@ class BuildSecurity:
         self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 -v keepsyms=1 nvme_shutdown_timestamp=0")
 
         if self.constants.detected_os >= os_data.os_data.tahoe:
-            is_tahoe_target=True
-            self.apply_cryptex_patches()
-        elif is_tahoe_target==False and self.constants.detected_os >= os_data.os_data.mojave and self.constants.detected_os < os_data.os_data.tahoe:
+            self.is_tahoe_target = True
+            self._apply_cryptex_patches(apple_nvram_uuid)
+        elif self.is_tahoe_target is False and self.constants.detected_os >= os_data.os_data.mojave and self.constants.detected_os < os_data.os_data.tahoe:
             logging.info("Popping up a popup to ask if the OS target is Tahoe or not since we couldn't identify...")
-            self.unknown_target()
+            self._unknown_target(apple_nvram_uuid)
         else:
             logging.error("Upgrading from macOS High Sierra to Tahoe is not possible. Please, upgrade to macOS Sequoia first. We'll skip any macOS 26-only patches.")
-            continue
+            return
 
-    def _unknown_target(self) -> None:
+    def _unknown_target(self, apple_nvram_uuid: str) -> None:
         """
-        Custom error dialog that provides a direct 'Ask Gemini' bridge 
-        for debugging complex build errors.
+        Custom error dialog that provides manual OS mapping.
         """
-        dlg = wx.Dialog(self, title="Unknown Target", size=(450, 250))
+        # wx requires an active App lifecycle frame context or None wrapper
+        dlg = wx.Dialog(None, title="Unknown Target", size=(450, 250))
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Build error explanation
         msg = wx.StaticText(dlg, label="What version would you like to run on your unsupported T2 Mac?")
         sizer.Add(msg, 0, wx.ALL | wx.CENTER, 20)
 
-        # Button Row: Ask Gemini | View Log | Close
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         macOS26_btn = wx.Button(dlg, label="macOS 26 Tahoe or newer")
-        macOS26_btn.Bind(wx.EVT_BUTTON, lambda e: self.macOS26Tahoe())
-        macOS15_btnwx.Button(dlg, label="macOS 15 Sequoia or older")
-        macOS15_btn.Bind(wx.EVT_BUTTON, lambda e: self.macOS15Sequoia())
+        macOS26_btn.Bind(wx.EVT_BUTTON, lambda e: self._macOS26Tahoe(dlg, apple_nvram_uuid))
         
+        macOS15_btn = wx.Button(dlg, label="macOS 15 Sequoia or older")
+        macOS15_btn.Bind(wx.EVT_BUTTON, lambda e: self._macOS15Sequoia(dlg))
         
         btn_sizer.Add(macOS26_btn, 0, wx.ALL, 5)
         btn_sizer.Add(macOS15_btn, 0, wx.ALL, 5)
@@ -332,16 +332,17 @@ class BuildSecurity:
         dlg.ShowModal()
         dlg.Destroy()
 
-    def _macOS15Sequoia(self):
+    def _macOS15Sequoia(self, dialog: wx.Dialog) -> None:
         logging.info("Skip injecting cryptex=0 cs_allow_invalid=1 for macOS 15 Sequoia or older...")
-        continue
+        dialog.EndModal(wx.ID_CANCEL)
 
-    def macOS26Tahoe(self):
-        is_tahoe_target=True
-        self.apply_cryptex_patches()
+    def _macOS26Tahoe(self, dialog: wx.Dialog, apple_nvram_uuid: str) -> None:
+        self.is_tahoe_target = True
+        self._apply_cryptex_patches(apple_nvram_uuid)
+        dialog.EndModal(wx.ID_OK)
     
-    def _apply_cryptex_patches(self):
-        if is_tahoe_target==True:
+    def _apply_cryptex_patches(self, apple_nvram_uuid: str) -> None:
+        if self.is_tahoe_target is True:
             logging.info("Injecting cryptex=0 cs_allow_invalid=1 for macOS 26 Tahoe")
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
         else:
