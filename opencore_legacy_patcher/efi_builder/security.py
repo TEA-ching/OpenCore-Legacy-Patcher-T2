@@ -296,7 +296,7 @@ class BuildSecurity:
         if self.constants.detected_os >= os_data.os_data.tahoe:
             is_tahoe_target=True
             self.apply_cryptex_patches()
-        elif is_tahoe_target=False and self.constants.detected_os >= os_data.os_data.mojave and self.constants.detected_os < os_data.os_data.tahoe
+        elif is_tahoe_target==False and self.constants.detected_os >= os_data.os_data.mojave and self.constants.detected_os < os_data.os_data.tahoe
             logging.info("Popping up a popup to ask if the OS target is Tahoe or not since we couldn't identify...")
             self.unknown_target()
         else:
@@ -341,7 +341,7 @@ class BuildSecurity:
         self.apply_cryptex_patches()
     
     def _apply_cryptex_patches(self):
-        if is_tahoe_target=True:
+        if is_tahoe_target==True:
             logging.info("Injecting cryptex=0 cs_allow_invalid=1 for macOS 26 Tahoe")
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
         else:
