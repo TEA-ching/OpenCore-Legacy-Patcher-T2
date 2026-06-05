@@ -6,6 +6,7 @@ import logging
 import binascii
 import sys
 import wx
+import threading
 
 from . import support
 from .. import constants
