@@ -110,20 +110,36 @@ class InstallOCFrame(wx.Frame):
 
     def _fetch_disks(self) -> None:
         """
-        Fetch information on local disks
+        Fetch information on local disks safely using local scoping 
+        to prevent race conditions and dictionary manipulation.
         """
-        logging.info("You're running macOS version older than macOS 10.12 Sierra. Cleaning up output...")
-        self.available_disks = install.tui_disk_installation(self.constants).list_disks()
+        # 1. Fetch data into a localized variable. 
+        # Shared state (self.available_disks) is not touched yet.
+        raw_disks = install.tui_disk_installation(self.constants).list_disks()
+        if not raw_disks:
+            self.available_disks = {}
+            return
 
-        # Need to clean up output on pre-Sierra
-        # Disk images are mixed in with regular disks (ex. payloads.dmg)
-        ignore = ["disk image", "read-only", "virtual"]
+        current_version = InstallOCFrame.get_mac_version()
+
         if current_version < (10, 12):
-            for disk in self.available_disks.copy():
-                if any(string in self.available_disks[disk]['name'].lower() for string in ignore):
-                    del self.available_disks[disk]
+            logging.info(f"Detected legacy macOS version {current_version}. Cleaning up output safely...")
+            
+            # 2. Build a fresh, filtered dictionary instead of mutating in place
+            ignore = ["disk image", "read-only", "virtual"]
+            filtered_disks = {}
+            
+            for disk_id, disk_info in raw_disks.items():
+                disk_name = disk_info.get('name', '').lower()
+                if not any(bad_string in disk_name for bad_string in ignore):
+                    filtered_disks[disk_id] = disk_info
+            
+            # 3. Publish the sanitized data to the instance variable all at once (Atomic operation)
+            self.available_disks = filtered_disks
         else:
-            logging.info("You're running macOS Sierra or later. No need to clean up legacy output.")
+            logging.info(f"Detected macOS {current_version}. No legacy cleanup required.")
+            # Publish directly since no filtering is needed
+            self.available_disks = raw_disks
 
 
     def _display_disks(self) -> None:
