@@ -242,15 +242,9 @@ class BuildSecurity:
         APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
 
         if self.model in _T2_LOW_POWER_MODELS:
-            if self.model == "MacBookPro16,3":
-                logging.info(f"- {self.model}: Injecting Ice Lake LP Framebuffer properties (Tahoe fix)")
-                # Native Ice Lake LP values to bypass platform controller mismatch panics
-                gfx["AAPL,ig-platform-id"] = binascii.unhexlify("00005B8A")
-                gfx["device-id"]           = binascii.unhexlify("5B8A0000")
-            else:
-                logging.info(f"- {self.model}: Injecting connector-less UHD617 DeviceProperties (Tahoe fix)")
-                gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
-                gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
+            logging.info(f"- {self.model}: Injecting connector-less Intel UHD Graphics 617 and Amber Lake DeviceProperties (Tahoe fix)")
+            gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
+            gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
 
             self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxgl=1 igfxmetal=1")
             logging.info("  > Added igfxgl=1 igfxmetal=1 (LP Display sync fix)")
@@ -307,6 +301,7 @@ class BuildSecurity:
             self.unknown_target()
         else:
             logging.error("Upgrading from macOS High Sierra to Tahoe is not possible. Please, upgrade to macOS Sequoia first. We'll skip any macOS 26-only patches.")
+            continue
 
     def _unknown_target(self) -> None:
         """
@@ -317,7 +312,7 @@ class BuildSecurity:
         sizer = wx.BoxSizer(wx.VERTICAL)
 
         # Build error explanation
-        msg = wx.StaticText(dlg, label="What version would you like to run on your unsupported T2 Mac?\n\n")
+        msg = wx.StaticText(dlg, label="What version would you like to run on your unsupported T2 Mac?")
         sizer.Add(msg, 0, wx.ALL | wx.CENTER, 20)
 
         # Button Row: Ask Gemini | View Log | Close
@@ -330,13 +325,21 @@ class BuildSecurity:
         
         
         btn_sizer.Add(macOS26_btn, 0, wx.ALL, 5)
-        btn_sizer.Add(close_btn, 0, wx.ALL, 5)
+        btn_sizer.Add(macOS15_btn, 0, wx.ALL, 5)
         
         sizer.Add(btn_sizer, 0, wx.CENTER)
         dlg.SetSizer(sizer)
         dlg.ShowModal()
         dlg.Destroy()
 
+    def _macOS15Sequoia(self):
+        logging.info("Skip injecting cryptex=0 cs_allow_invalid=1 for macOS 15 Sequoia or older...")
+        continue
+
+    def macOS26Tahoe(self):
+        is_tahoe_target=True
+        self.apply_cryptex_patches()
+    
     def _apply_cryptex_patches(self):
         if is_tahoe_target=True:
             logging.info("Injecting cryptex=0 cs_allow_invalid=1 for macOS 26 Tahoe")
