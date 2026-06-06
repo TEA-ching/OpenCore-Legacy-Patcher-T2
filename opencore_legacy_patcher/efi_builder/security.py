@@ -391,24 +391,6 @@ class BuildSecurity:
                 "Skip": 0
             })
 
-        if not patch_exists("Increase T2 USB Timeout (UI Stall fix)"):
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Comment": "Increase T2 USB Timeout (UI Stall fix)",
-                "Enabled": True,
-                "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                # Matches: MOV R13D, dword ptr [RBX + 0x50]; CMP R13D, dword ptr [RBX + 0x54]
-                "Find": binascii.unhexlify("448B6B50443B6B54"),
-                "Mask": b"",
-                "MaxKernel": "",
-                "MinKernel": "25.0.0",
-                # Replaces with: NOP; NOP; NOP; NOP; XOR R13D, R13D; CMP R13D, 0x00
-                # This breaks the equality block check safely to expand tollerance thresholds
-                "Replace": binascii.unhexlify("909090904531ED4539ED"),
-                "ReplaceMask": b"",
-                "Skip": 0
-            })
-
         # 3. Bypass InternalHubPowerCheck
         if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
             kernel_patches.append({
