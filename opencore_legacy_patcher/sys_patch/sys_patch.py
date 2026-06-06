@@ -38,6 +38,7 @@ This is because Apple removed on-disk binaries (ref: https://github.com/dortania
 import logging
 import plistlib
 import subprocess
+import sys
 
 from pathlib   import Path
 from functools import cache
