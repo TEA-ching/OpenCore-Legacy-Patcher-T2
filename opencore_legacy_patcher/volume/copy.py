@@ -2,6 +2,7 @@
 copy.py: Generate performant '/bin/cp' arguments for macOS
 """
 
+import sys
 from pathlib import Path
 
 from .properties import PathAttributes
