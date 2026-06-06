@@ -423,6 +423,34 @@ class BuildSecurity:
                     "Replace": binascii.unhexlify("31C090905B415C415D415E415F5DC3"),
                     "MinKernel": "25.0.0"
                 })
+    
+        """Injects corecrypto binary shims to bypass FIPS Kernel POST verification failures."""
+        logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets")
+    
+        corecrypto_patch = {
+            "Arch": "x86_64",
+            "Base": "",  # Clear this out so it relies purely on the robust unique hex match
+            "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
+            "Count": 1,
+            "Enabled": True,
+            # Matches the exact CMP and JBE instructions we found at 0xffffff8000333c28
+            "Find": binascii.unhexlify("4883F98E767B"), 
+            "Identifier": "com.apple.kec.corecrypto",
+            "Limit": 0,
+            "Mask": b"",  # No mask needed since our Find sequence is a direct, concrete binary match
+            "MaxKernel": "",
+            "MinKernel": "25.0.0", 
+            # Replaces the 2-byte branch '76 7B' (JBE) with '90 90' (NOP NOP) to slide safely past the panic trigger
+            "Replace": binascii.unhexlify("4883F98E9090"), 
+            "ReplaceMask": b"",
+            "Skip": 0
+        }
+    
+        if "Patch" not in self.config["Kernel"]:
+            self.config["Kernel"]["Patch"] = []
+            
+        self.config["Kernel"]["Patch"].append(corecrypto_patch)
+        logging.info("  > corecrypto FIPS shim appended to Kernel->Patch array successfully.")
 
     # ------------------------------------------------------------------
     # Main build entry point
