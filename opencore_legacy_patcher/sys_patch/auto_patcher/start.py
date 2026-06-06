@@ -11,6 +11,7 @@ import requests
 import markdown2
 import subprocess
 import webbrowser
+import sys
 
 
 from ... import constants
@@ -75,7 +76,7 @@ class StartAutomaticPatching:
             ID_GITHUB = wx.NewId()
             ID_UPDATE = wx.NewId()
 
-            url = "https://api.github.com/repos/dortania/OpenCore-Legacy-Patcher/releases/latest"
+            url = "https://api.github.com/repos/albert-mueller/OpenCore-Legacy-Patcher-T2/releases/latest"
             response = requests.get(url).json()
             try:
                 changelog = response["body"].split("## Asset Information")[0]
