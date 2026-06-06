@@ -93,13 +93,18 @@ class BuildOpenCore:
 
         if is_t2:
             try:
-                logging.info("- Importing t2smbiossecurity")
-                from ..efi_builder import t2smbiossecurity
-                try:
-                    logging.info("- Add Booter Quirks patches for T2 Macs ")
-                    t2smbiossecurity.finalize_t2_tahoe(self.constants.plist_path)
+                logging.info("- Applying in-memory T2 booter and SMBIOS alignment")
+                self.config.setdefault("Booter", {}).setdefault("Quirks", {}).update({
+                    "RebuildAppleMemoryMap": False,
+                    "EnableWriteUnprotector": False,
+                    "SyncRuntimePermissions": False,
+                    "DevirtualiseMmio": False,
+                })
+                self.config.setdefault("PlatformInfo", {})["UpdateSMBIOSMode"] = "Custom"
+                self.config.setdefault("Kernel", {}).setdefault("Quirks", {})["CustomSMBIOSGuid"] = True
+                self.config.setdefault("Misc", {}).setdefault("Security", {})["SecureBootModel"] = "Disabled"
                 except Exception as e:
-                    logging.error("Whoops, the function finalize_t2_tahoe failed to run because of the following error:")
+                    logging.error("Whoops, applying in-memory T2 booter and SMBIOS alignments failed because of the following error:")
                     logging.exception("Stack Trace:")
                     logging.info("Please try again later.")
                     sys.exit(3)
