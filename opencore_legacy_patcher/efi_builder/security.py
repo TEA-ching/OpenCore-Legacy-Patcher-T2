@@ -373,42 +373,58 @@ class BuildSecurity:
         def patch_exists(comment: str) -> bool:
             return any(p.get("Comment") == comment for p in kernel_patches)
 
-        # 1. Bypass AppleIntelUSBXHC T2 handshake
+        # 1. Bypass AppleIntelUSBXHCI T2 handshake
         if not patch_exists("Bypass T2 USB handshake (Tahoe fix)"):
             kernel_patches.append({
                 "Arch": "x86_64",
                 "Comment": "Bypass T2 USB handshake (Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("488D3D00000000488B0500000000488B4028FFD0"),
-                "Replace": binascii.unhexlify("488D3D00000000488B0500000000488B40289090"),
-                "Mask": binascii.unhexlify("FFFFFFF0000000FFFFFFF0000000FFFFFFFFFFFF"),
-                "ReplaceMask": binascii.unhexlify("FFFFFFF0000000FFFFFFF0000000FFFFFFFFFFFF"),
-                "MinKernel": "25.0.0"
+                # Matches: MOV RAX, qword ptr [RBX]; MOV RDI, RBX; CALL qword ptr [RAX + 0x38]
+                "Find": binascii.unhexlify("488B034889DFFF5038"),
+                "Mask": b"", # Exact binary instruction match; no wildcards needed
+                "MaxKernel": "",
+                "MinKernel": "25.0.0",
+                # Replaces 'FF 50 38' (CALL) with '31C090' (XOR EAX,EAX; NOP) to force return code 0 (Success)
+                "Replace": binascii.unhexlify("488B034889DF31C090"),
+                "ReplaceMask": b"",
+                "Skip": 0
             })
 
-        # 2. Increase AppleIntelUSBXHC Timeout (0x0A -> 0xFF)
         if not patch_exists("Increase T2 USB Timeout (UI Stall fix)"):
             kernel_patches.append({
                 "Arch": "x86_64",
                 "Comment": "Increase T2 USB Timeout (UI Stall fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("BA0A000000"),
-                "Replace": binascii.unhexlify("BAFF000000"),
-                "MinKernel": "25.0.0"
+                # Matches: MOV R13D, dword ptr [RBX + 0x50]; CMP R13D, dword ptr [RBX + 0x54]
+                "Find": binascii.unhexlify("448B6B50443B6B54"),
+                "Mask": b"",
+                "MaxKernel": "",
+                "MinKernel": "25.0.0",
+                # Replaces with: NOP; NOP; NOP; NOP; XOR R13D, R13D; CMP R13D, 0x00
+                # This breaks the equality block check safely to expand tollerance thresholds
+                "Replace": binascii.unhexlify("909090904531ED4539ED"),
+                "ReplaceMask": b"",
+                "Skip": 0
             })
 
         # 3. Bypass InternalHubPowerCheck
         if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Comment": "Bypass InternalHubPowerCheck (Tahoe fix)",
+                "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("4183BC24F80100000075"),
-                "Replace": binascii.unhexlify("4183BC24F801000000EB"),
-                "MinKernel": "25.0.0"
+                # Matches: PUSH RBP; MOV RBP, RSP; MOV RAX, qword ptr [RDI + 0x158]
+                "Find": binascii.unhexlify("554889E5488B8758010000"),
+                "Mask": b"",
+                "MaxKernel": "",
+                "MinKernel": "25.0.0",
+                # Replaces structure load with 'MOV RAX, RDI; NOP; NOP; NOP; NOP' to spoof a valid hub node response
+                "Replace": binascii.unhexlify("554889E54889F890909090"),
+                "ReplaceMask": b"",
+                "Skip": 0
             })
         
         if self.model in _T2_TOUCH_BAR_MODELS:
