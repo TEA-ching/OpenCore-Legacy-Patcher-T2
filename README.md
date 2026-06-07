@@ -25,7 +25,7 @@ A Python-based project revolving around [Acidanthera's OpenCorePkg](https://gith
 - [X] Remove USB port mapping for MacBookAir8,1 and 8,2 - done
 - [X] Fix https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues/25 
 - [X] Return support for MacBookAir8,1 and MacBookAir8,2
-- [ ] Installer boots - not always
+- [X] Installer boots - only with alpha 14 (precompiled or source; it doesn't matter) and pre-alpha 10 (source code only; not released due to 3-4 models may panic plus weird APFS behavior)
 - [ ] Internal hard drive mounts properly on T2 Macs
 - [ ] Post-install + full OS usability
 
