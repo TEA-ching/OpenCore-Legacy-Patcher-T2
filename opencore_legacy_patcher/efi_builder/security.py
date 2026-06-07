@@ -410,6 +410,7 @@ class BuildSecurity:
             })
         
         if self.model in _T2_TOUCH_BAR_MODELS:
+            # Es sieht wie ein anderen KI-generierten Patch; überprüfen und richtig reverse engineeren ist erforderlich
             # 5. Patch AppleTouchBarHIDEventDriver
             if not patch_exists("Patch AppleTouchBarHIDEventDriver (Tahoe fix)"):
                 kernel_patches.append({
