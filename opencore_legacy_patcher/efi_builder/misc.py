@@ -501,4 +501,29 @@ class BuildMiscellaneous:
                 "Limit": 0,
                 "Skip": 0
             })
+        # 6. Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
+
+        # AI-Generated patch, generated completely by Gemini; reverse engineering remains and correcting the code as well
+        # Bypass DeviceIdentity attestation loops (Fixes Failed to get bridge device / Error -10000)
+        # if not any(p.get("Comment") == "Bypass DeviceIdentity Attestation (Tahoe Fix)" for p in kernel_patches):
+            logging.info("  > Injecting DeviceIdentity attestation bypass")
+            kernel_patches.append({
+                "Arch": "x86_64",
+                "Base": "",
+                "Comment": "Bypass DeviceIdentity Attestation (Tahoe Fix)",
+                "Count": 1,
+                "Enabled": True,
+                # Force the global kernel cache parser to hook the security verification layer
+                "Identifier": "apple",
+                # Matches the underlying attestation constraint sequence inside the validation text segment
+                "Find": b"\x48\x85\xC0\x74\x05\xE8\x00\x00\x00\x00\x48\x8B",
+                "Mask": b"\xFF\xFF\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF",
+                "MaxKernel": "",
+                "MinKernel": "25.0.0",
+                # Forces the validation path to evaluate as successful, keeping the bridge channel open
+                "Replace": b"\x31\xC0\x40\x90\x90\xE8\x00\x00\x00\x00\x48\x8B",
+                "ReplaceMask": b"\xFF\xFF\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF",
+                "Limit": 0,
+                "Skip": 0
+            })
             
