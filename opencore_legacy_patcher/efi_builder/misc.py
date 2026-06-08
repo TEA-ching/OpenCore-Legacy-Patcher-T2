@@ -466,7 +466,7 @@ class BuildMiscellaneous:
         self._set_nvram_value(APPLE_NVRAM_UUID, "prev-lang:kbd", prev_lang_bytes, overwrite=True)
         
         # 2. Force the global language/locale environment variables to anchor the region
-        # This stops the setup subsystem from falling back to European/German region formats
+        # This stops the setup subsystem from falling back to default language/region
         self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLanguages", ["en-US"], overwrite=True)
         self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLocale", "en_US", overwrite=True)
 
