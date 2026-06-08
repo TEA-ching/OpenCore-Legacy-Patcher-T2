@@ -411,6 +411,7 @@ class BuildMiscellaneous:
         """T2 Security Chip Handler."""
         if not self._is_t2_mac():
             return
+        enable_experimental_patches=False
 
         builder = support.BuildSupport(self.model, self.constants, self.config)
         self.config.setdefault("Kernel", {}).setdefault("Patch", [])
@@ -570,10 +571,10 @@ class BuildMiscellaneous:
         # aber momentan es mountet noch immer keine Partitionen
         # beim Herunterfahren des Installationsprogramm mit dieser Patch eingeschaltet den Mac zeigt einen Kernel Panic
         # 3. Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
-        try:
+        if enable_experimental_patches=True:
             if not any(p.get("Comment") == "Bypass DeviceIdentity Attestation (Tahoe Fix)" for p in kernel_patches):
                 logging.info("  > Injecting DeviceIdentity attestation bypass into AppleSEPManager")
-                # kernel_patches.append({
+                kernel_patches.append({
                     "Arch": "x86_64",
                     "Base": "",
                     "Comment": "Bypass DeviceIdentity Attestation (Tahoe Fix)",
@@ -592,7 +593,7 @@ class BuildMiscellaneous:
                     "ReplaceMask": b"\xFF\xFF\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF",
                     "Limit": 0,
                     "Skip": 0
-                })
+            })
         except Exception as e:
             logging.error("Bypass DeviceIdentity Attestation is not enabled by the user. Don't worry, it's an optional feature".)
 
