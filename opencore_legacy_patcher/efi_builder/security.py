@@ -410,18 +410,8 @@ class BuildSecurity:
             })
         
         if self.model in _T2_TOUCH_BAR_MODELS:
-            # Es sieht wie ein anderen KI-generierten Patch; überprüfen und richtig reverse engineeren ist erforderlich
-            # 5. Patch AppleTouchBarHIDEventDriver
-            if not patch_exists("Patch AppleTouchBarHIDEventDriver (Tahoe fix)"):
-                kernel_patches.append({
-                    "Arch": "x86_64",
-                    "Comment": "Patch AppleTouchBarHIDEventDriver (Tahoe fix)",
-                    "Enabled": True,
-                    "Identifier": "com.apple.driver.AppleTouchBarHIDEventDriver",
-                    "Find": binascii.unhexlify("4883C4085B415C415D415E415F5DC3"),
-                    "Replace": binascii.unhexlify("31C090905B415C415D415E415F5DC3"),
-                    "MinKernel": "25.0.0"
-                })
+            logging.info("No touch bar patches available for now. Don't worry - your system should boot.")
+            logging.info("Keine Touch Bar Patches sind verfügbar. Macht euch keine Sorge - das System soll trotzdem starten.")
     
         """Injects corecrypto binary shims to bypass FIPS Kernel POST verification failures."""
         logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets")
