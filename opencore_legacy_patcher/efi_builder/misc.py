@@ -594,6 +594,6 @@ class BuildMiscellaneous:
                     "Skip": 0
             })
         except Exception as e:
-            logging.error("Bypass DeviceIdentity Attestation is not enabled by the user. Don't worry, it's an optional feature".)
+            logging.info("Optional patches are disabled, so no untested patches will be injected.")
 
             
