@@ -592,8 +592,4 @@ class BuildMiscellaneous:
                     "ReplaceMask": b"\xFF\xFF\xFF\xFF\xFF\xFF\x00\x00\x00\x00\xFF\xFF",
                     "Limit": 0,
                     "Skip": 0
-            })
-        except Exception as e:
-            logging.info("Optional patches are disabled, so no untested patches will be injected.")
-
-            
+            })      
