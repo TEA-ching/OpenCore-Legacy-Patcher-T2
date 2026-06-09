@@ -46,10 +46,10 @@ def rmtree_handler(func, path, exc: BaseException) -> None:
         raise exc
         
     except Exception as e:
-         logging.error(f"Function Error: {e}")
-            logging.exception("Stack Trace:") # This prints the full technical error
-            logging.info("Please try again later.")
-            sys.exit(3)
+        logging.error(f"Function Error: {e}")
+        logging.exception("Stack Trace:") # This prints the full technical error
+        logging.info("Please try again later.")
+        sys.exit(3)
 
 class BuildOpenCore:
         
