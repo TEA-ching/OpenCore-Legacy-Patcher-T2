@@ -42,10 +42,14 @@ def rmtree_handler(func, path, exc: BaseException) -> None:
             
         # If it's not a FileNotFoundError, we log the failure to the GUI
         logging.error(f"Critical: rmtree_handler cannot start cleanup for path: {path}")
+        logging.exception("Stack Trace:") # This prints the full technical error
         raise exc
         
     except Exception as e:
-        logging.error(f"Function Error: {e}")
+         logging.error(f"Function Error: {e}")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
+            sys.exit(3)
 
 class BuildOpenCore:
         
