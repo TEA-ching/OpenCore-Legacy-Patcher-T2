@@ -182,11 +182,18 @@ class BuildOpenCore:
             function(self.model, self.constants, self.config)
 
         # Work-around ocvalidate
+        # Auch behebt einen Fehler, indem Windows 10/11 per Boot Camp-Installation verschwindet wegen zu viele Malen \EFI\Microsoft\Boot\bootmgfw.efi erstellt werden oder das \EFI\Microsoft\Boot\bootmgfw.efi erstellen in config.plist, auch wenn es schon da steht.
         if self.constants.validate is False:
             logging.info("- Adding bootmgfw.efi BlessOverride")
+            
+            # Ensure the section exists
             if "BlessOverride" not in self.config["Misc"]:
                 self.config["Misc"]["BlessOverride"] = []
-            self.config["Misc"]["BlessOverride"].append("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")    
+                
+            # FIX: Only append if it's not already there
+            target_path = "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"
+            if target_path not in self.config["Misc"]["BlessOverride"]:
+                self.config["Misc"]["BlessOverride"].append(target_path)    
 
     
     
