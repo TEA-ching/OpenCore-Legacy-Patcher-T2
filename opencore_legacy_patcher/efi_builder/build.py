@@ -33,13 +33,17 @@ security,
 misc
 )
 
-def rmtree_handler(func, path, exc_info) -> None:
+# von def rmtree_handler(func, path, exc_info) -> None: zu def rmtree_handler(func, path, exc: BaseException) -> None: wechseln, um Kompabilität mit Python 3.13+ zu verbessern und Python 3.14-Kompabilität zu ermöglichen
+def rmtree_handler(func, path, exc: BaseException) -> None:
     try:
-        if exc_info[0] == FileNotFoundError:
+        # Python 3.13 passes the bare exception instance instead of a tuple
+        if isinstance(exc, FileNotFoundError):
             return
+            
         # If it's not a FileNotFoundError, we log the failure to the GUI
-        logging.error("Critical: rmtree_handler cannot start cleanup for path!")
-        raise 
+        logging.error(f"Critical: rmtree_handler cannot start cleanup for path: {path}")
+        raise exc
+        
     except Exception as e:
         logging.error(f"Function Error: {e}")
 
@@ -213,7 +217,7 @@ class BuildOpenCore:
             Path(self.constants.opencore_zip_copied).unlink()
         if Path(self.constants.opencore_release_folder).exists():
             logging.info("Deleting old copy of OpenCore folder")
-            shutil.rmtree(self.constants.opencore_release_folder, onerror=rmtree_handler, ignore_errors=True)
+            shutil.rmtree(self.constants.opencore_release_folder, on_exc=rmtree_handler)
 
         logging.info("")
         logging.info(f"- Adding OpenCore v{self.constants.opencore_version} {'DEBUG' if self.constants.opencore_debug is True else 'RELEASE'}")
