@@ -203,7 +203,7 @@ class PatcherValidation:
 
         try:
             # Full loop coverage 0-10 for every supported OS version
-            for supported_os in [os_data.os_data.big_sur, os_data.os_data.monterey, os_data.os_data.ventura, os_data.os_data.sonoma, os_data.os_data.sequoia]:
+            for supported_os in [os_data.os_data.big_sur, os_data.os_data.monterey, os_data.os_data.ventura, os_data.os_data.sonoma, os_data.os_data.sequoia, os_data.os_data.tahoe]:
                 for i in range(0, 11):
                     self._validate_root_patch_files(supported_os, i)
 
