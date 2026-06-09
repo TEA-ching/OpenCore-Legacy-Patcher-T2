@@ -249,7 +249,7 @@ class GenerateDefaults:
         # 14.0: Modern Wireless chipsets require root patching
         if self.model in smbios_data.smbios_dictionary:
             if smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < os_data.os_data.sonoma:
-                self.constants.sip_status = True
+                # Behebt einen Fehler, indem SIP-Status auf True setzt und dann wieder auf False; es sollte nicht so sein. Normalerweise das sogennante Root Patching, die sorgt dafür, alten Treibern zu installieren, benötigt SIP-Status aufs False zu setzen.
                 self.constants.sip_status = False
                 self.constants.secure_status = False
                 self.constants.disable_cs_lv = True
@@ -438,11 +438,13 @@ class GenerateDefaults:
                 # Check if type is different
                 original_type = type(getattr(self.constants, constants_key))
                 new_type = type(plist[key])
-                if original_type != new_type:
+                
+                # FIX: Only flag a mismatch if the types don't match AND the incoming value isn't None
+                if original_type != new_type and plist[key] is not None:
                     logging.error(f"Global settings type mismatch for {constants_key}: {original_type} vs {new_type}")
                     logging.error(f"Removing {key} from global settings")
                     global_settings.GlobalEnviromentSettings().delete_property(key)
                     continue
-
+            
                 logging.info(f"Setting {constants_key} to {plist[key]}")
                 setattr(self.constants, constants_key, plist[key])
