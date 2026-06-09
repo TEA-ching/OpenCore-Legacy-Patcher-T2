@@ -33,7 +33,7 @@ security,
 misc
 )
 
-# von def rmtree_handler(func, path, exc_info) -> None: zu def rmtree_handler(func, path, exc: BaseException) -> None: wechseln, um Kompabilität mit Python 3.13+ zu verbessern und Python 3.14-Kompabilität zu ermöglichen
+# von def rmtree_handler(func, path, exc_info) -> None: verabscheiden und zu def rmtree_handler(func, path, exc: BaseException) -> None: wechseln, um Kompabilität mit Python 3.13+ zu verbessern und Python 3.14-Kompabilität zu ermöglichen
 def rmtree_handler(func, path, exc: BaseException) -> None:
     try:
         # Python 3.13 passes the bare exception instance instead of a tuple
