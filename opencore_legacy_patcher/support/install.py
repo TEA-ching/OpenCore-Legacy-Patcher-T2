@@ -155,7 +155,10 @@ class tui_disk_installation:
                 
         except subprocess.CalledProcessError as e:
             logging.error(f"File operation failed during installation: {e}")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
             return False
+            sys.exit(3)
 
         if self._determine_sd_card(sd_type) is True:
             logging.info("Adding SD Card icon")
