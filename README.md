@@ -28,7 +28,8 @@ A Python-based project revolving around [Acidanthera's OpenCorePkg](https://gith
 - [X] Installer boots
 - [ ] MacBookAir8,1 and MacBookAir8,2 can boot the installer
 - [ ] Internal hard drive mounts properly on T2 Macs - https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues/69
-- [ ] Post-install + full OS usability
+- [ ] Post-install + ability to reach the desktop
+- [ ] GPU accelaration/WiFi - most T2 Macs will have WIFi out of the box
 
 
 Our goal of this project is to add support for T2 Macs so unsupported T2 Macs can boot into Sequoia and Tahoe. This project may run on non-T2 Macs, but support is limited for those and that's not the focus of this project.
