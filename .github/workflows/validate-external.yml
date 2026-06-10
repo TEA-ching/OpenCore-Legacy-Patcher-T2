@@ -17,14 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Universal Python 3.14
+      - name: Install Universal Python 3.13
         run: |
-          curl -fsSL -o python-installer.pkg https://www.python.org/ftp/python/3.14.0/python-3.14.0-macos11.pkg
+          curl -fsSL -o python-installer.pkg https://www.python.org/ftp/python/3.13.14/python-3.13.14-macos11.pkg
           sudo installer -pkg python-installer.pkg -target /
-          echo "/Library/Frameworks/Python.framework/Versions/3.14/bin" >> $GITHUB_PATH
+          echo "/Library/Frameworks/Python.framework/Versions/3.13/bin" >> $GITHUB_PATH
 
       - name: Install Dependencies
-        run: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pip install -r requirements.txt
+        run: /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m pip install -r requirements.txt
 
       - name: Validate
-        run: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 OpenCore-Patcher-GUI.command --validate
+        run: /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 OpenCore-Patcher-GUI.command --validate
