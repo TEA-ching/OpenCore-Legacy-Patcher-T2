@@ -32,7 +32,7 @@ jobs:
         run: |
           curl -fsSL -o python-installer.pkg https://www.python.org/ftp/python/3.13.14/python-3.13.14-macos11.pkg
           sudo installer -pkg python-installer.pkg -target /
-          echo "/Library/Frameworks/Python.framework/Versions/3.13.14/bin" >> $GITHUB_PATH
+          echo "/Library/Frameworks/Python.framework/Versions/3.13/bin" >> $GITHUB_PATH
 
       - name: Cache pip dependencies
         uses: actions/cache@v4
@@ -43,7 +43,7 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install Dependencies
-        run: /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m pip install -r requirements.txt
+        run: /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m pip install -r requirements.txt
 
       - name: Force Universal2 charset for Python
         run: |
@@ -57,7 +57,7 @@ jobs:
 
       - name: Prepare Assets (--prepare-assets)
         run: >
-          /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 Build-Project.command
+          /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 Build-Project.command
           --run-as-individual-steps --reset-dmg-cache
           --prepare-assets
 
@@ -73,7 +73,7 @@ jobs:
 
       - name: Prepare Package (--prepare-package)
         run: >
-          /Library/Frameworks/Python.framework/Versions/3.14/bin/python3 Build-Project.command
+          /Library/Frameworks/Python.framework/Versions/3.13/bin/python3 Build-Project.command
           --run-as-individual-steps
           --prepare-package
 
@@ -108,5 +108,4 @@ jobs:
             ## OpenCore Legacy Patcher ${{ github.ref_name }}
 
             ### Changes
-            - Added T2 Mac support for MacBookAir8,1 (MacBook Air 2018) and MacBookAir8,2 (MacBook Air 2019)
-            - Fixes USB boot entry not appearing in T2 Mac Startup Manager (adds EFI/BOOT/BOOTx64.efi)
+            - Added T2 Mac support
