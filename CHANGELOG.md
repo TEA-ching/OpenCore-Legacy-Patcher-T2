@@ -1,6 +1,6 @@
 # OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungslog
 
-## 4.0.0 pre-alpha Release Candidate for alpha 15 (upcoming) / 4.0.0 Release Candidate für Alpha 15 (wird vorkommen)
+## 4.0.0 pre-alpha Release Candidate for alpha 15 / 4.0.0 Release Candidate für Alpha 15
 This release:
 - changes blindly AI generated patches that cause corecrypto and other related kernel panics with human verified ones
 - Fixes a bug/vulnerability where in some files import logging is missing where logging.info was used. This could crash the specific files or worse - attackers to do this without a user to know:
