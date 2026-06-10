@@ -811,7 +811,7 @@ class SettingsFrame(wx.Frame):
                     ],
                     "warning": "This option should only be used if your Mac natively supports the OSes you wish to run.\n\nIf you are currently running an unsupported OS, this option will break booting. Only toggle for enabling OS features on a native Mac.\n\nAre you certain you want to continue?",
                 },
-                "Disable automatic updates (not recommended)": {
+                "Disable automatic updates": {
                     "type": "checkbox",
                     "value": global_settings.GlobalEnviromentSettings().read_property("IgnoreAppUpdates") or self.constants.ignore_updates,
                     "variable": "IgnoreAppUpdates",
