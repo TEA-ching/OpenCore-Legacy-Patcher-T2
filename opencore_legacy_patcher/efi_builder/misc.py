@@ -478,7 +478,7 @@ class BuildMiscellaneous:
         logging.info("- Adding T2-specific boot arguments for macOS 15/26")
         self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-v rddelay=5 igfxfw=2 igfxonln=1 -disable_ext_panics -no_compat_check")
         if self.model in["MacBookAir8,1", "MacBookAir8,2"]:
-            logging.info("Applying patches for MacBookAir8,1 or 8,2 to fix developer mode is force enabled on this platform AMFI: finished: 1 1 using 16384 buffer headers and 10240 cluster 10 buffer headers Previous shutdown cause: 1 panics"
+            logging.info("Applying patches for MacBookAir8,1 or 8,2 to fix developer mode is force enabled on this platform AMFI: finished: 1 1 using 16384 buffer headers and 10240 cluster 10 buffer headers Previous shutdown cause: 1 panics")
             self.config["Kernel"]["Quirks"]["ProvideCurrentCpuInfo"] = True
             
         # Structure guarding for OpenCore NVRAM delete layout
