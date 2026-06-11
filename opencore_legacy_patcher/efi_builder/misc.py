@@ -405,6 +405,8 @@ class BuildMiscellaneous:
                 builder.enable_kext(name, version, path)
         except Exception as e:
             logging.error(f"CRITICAL: Failed to configure T1 Security Chip: {e}")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
             sys.exit(3)
 
     def _t2_handling(self) -> None:
@@ -448,7 +450,7 @@ class BuildMiscellaneous:
                     "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC1EPS_",
                     "Find": b"",  # Dynamically resolved by OpenCore's linker parser
                     "Replace": b"\xC3",  # ret (Immediately returns, bypassing virtual JMP)
-                    "MinKernel": "24.0.0"
+                    "MinKernel": "25.0.0"
                 },
                 {
                     "Arch": "x86_64",
@@ -458,28 +460,48 @@ class BuildMiscellaneous:
                     "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC2EPS_",
                     "Find": b"",
                     "Replace": b"\xC3",  # ret
-                    "MinKernel": "24.0.0"
+                    "MinKernel": "25.0.0"
                 }
             ])
-        APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
-        logging.info("- Skipping Language and Region selection (all T2 models)")
-        
-        # 1. Format 'en-US:0' as a raw byte sequence terminated by a null byte or written as exact hex data
-        # In OpenCore config.plist, this must be represented as <656e2d55533a30> (en-US:0)
-        prev_lang_bytes = b"en-US:0"
-        
-        self._set_nvram_value(APPLE_NVRAM_UUID, "prev-lang:kbd", prev_lang_bytes, overwrite=True)
-        
-        # 2. Force the global language/locale environment variables to anchor the region
-        # This stops the setup subsystem from falling back to default language/region
-        self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLanguages", ["en-US"], overwrite=True)
-        self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLocale", "en_US", overwrite=True)
 
-        logging.info("- Adding T2-specific boot arguments for macOS 15/26")
-        self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-v rddelay=5 igfxfw=2 igfxonln=1 -disable_ext_panics -no_compat_check")
+        try:
+            APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
+            logging.info("- Skipping Language and Region selection (all T2 models)")
+            
+            # 1. Format 'en-US:0' as a raw byte sequence terminated by a null byte or written as exact hex data
+            # In OpenCore config.plist, this must be represented as <656e2d55533a30> (en-US:0)
+            prev_lang_bytes = b"en-US:0"
+            
+            self._set_nvram_value(APPLE_NVRAM_UUID, "prev-lang:kbd", prev_lang_bytes, overwrite=True)
+            
+            # 2. Force the global language/locale environment variables to anchor the region
+            # This stops the setup subsystem from falling back to default language/region
+            self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLanguages", ["en-US"], overwrite=True)
+            self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLocale", "en_US", overwrite=True)
+        except Exception as e:
+            logging.error("We failed to skip language and region selection. It failed to do so because of the following error:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            sys.exit(3)
+
+        try:
+            logging.info("- Adding T2-specific boot arguments for macOS 15/26")
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-v rddelay=5 igfxfw=2 igfxonln=1 -disable_ext_panics -no_compat_check")
+        except Exception as e:
+            logging.error("Injecting T2 specific boot arguments failed due to the following error:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            sys.exit(3)
+        
         if self.model in["MacBookAir8,1", "MacBookAir8,2"]:
-            logging.info("Applying patches for MacBookAir8,1 or 8,2 to fix developer mode is force enabled on this platform AMFI: finished: 1 1 using 16384 buffer headers and 10240 cluster 10 buffer headers Previous shutdown cause: 1 panics")
-            self.config["Kernel"]["Quirks"]["ProvideCurrentCpuInfo"] = True
+            try:
+                logging.info("Applying patches for MacBookAir8,1 or 8,2 to fix developer mode is force enabled on this platform AMFI: finished: 1 1 using 16384 buffer headers and 10240 cluster 10 buffer headers Previous shutdown cause: 1 panics")
+                self.config["Kernel"]["Quirks"]["ProvideCurrentCpuInfo"] = True
+            except Exception as e:
+                logging.error("Applying patches to fix this specific kernel panic failed due to the following error:")
+                logging.exception("Stack Trace:")
+                logging.info("Please try again later.")
+                sys.exit(3)
             
         # Structure guarding for OpenCore NVRAM delete layout
         self.config.setdefault("NVRAM", {}).setdefault("Delete", {})
@@ -491,8 +513,14 @@ class BuildMiscellaneous:
         # Bypass library validation enforcement on T2 hardware to prevent early kernel panics
         logging.info("- Bypassing Library Validation Enforcement hook patches for T2 core integrity protection.")
 
-        logging.info("- Set SIP to 0x803")
-        self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
+        try:
+            logging.info("- Set SIP to 0x803")
+            self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
+        except Exception as e:
+            logging.error("Setting SIP to 0x803 failed due to the following error:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            sys.exit(3)
         
         # Allows booting macOS 26 Tahoe's installer via OpenCore on T2 Macs
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
