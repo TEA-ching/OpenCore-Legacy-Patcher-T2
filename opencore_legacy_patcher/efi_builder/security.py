@@ -22,42 +22,41 @@ from ..datasets import (
 # ig-platform-id injection to avoid APFS volume group race condition
 # on macOS Tahoe and later. (Coffee Lake GT2)
 _T2_UHD630_MODELS = {
-    "MacBookPro15,1",  # 15-inch 2018 (UHD630 + Radeon)
-    "MacBookPro15,3",  # 15-inch 2019 (UHD630 + Radeon)
-    "MacBookPro16,1",  # 16-inch 2019 (UHD630 + Radeon)
-    "MacBookPro16,4",  # 16-inch 2019 CTO (UHD630 + Radeon)
-    "Macmini8,1",      # Mac mini 2018 (UHD630)
+    "MacBookPro15,1",  # 15-inch 2018 Intel UHD Graphics 630 + AMD Radeon Pro 555X
+    "MacBookPro15,3",  # 15-inch 2019 Intel UHD Graphics 630 + AMD Radeon Pro Vega 16/20
+    "MacBookPro16,1",  # 16-inch 2019, Intel UHD Graphics 630 + AMD Radeon Pro 5300M
+    "MacBookPro16,4",  # 16-inch 2019 CTO, Intel UHD Graphics 630 + AMD Radeon Pro 5600M
+    "Macmini8,1",      # Mac mini 2018 (Intel UHD Graphics 630)
 }
 
 # T2 Mac models with Intel Iris Plus Graphics (U-Series)
-# Required for v1.0.6 logic isolation (iGPU-only).
+# Required for logic isolation (iGPU-only).
 _T2_IRIS_PLUS_MODELS = {
-    "MacBookPro15,2",  # 13-inch 2018 (4 TB3)
-    "MacBookPro15,4",  # 13-inch 2019 (2 TB3)
+    "MacBookPro15,2",  # 13-inch 2018 (4 TB3) - Intel Iris Plus Graphics 655
+    "MacBookPro15,4",  # 13-inch 2019 (2 TB3) - Intel Iris Plus Graphics 645
 }
 
 # T2 Mac models that use Intel UHD 617 / Ice Lake LP and require graphics injection for stability.
 _T2_LOW_POWER_MODELS = {
-    "MacBookAir8,1",   # Air 2018
-    "MacBookAir8,2",   # Air 2019
-    "MacBookAir9,1",   # Air 2020 Intel
-    "MacBookPro16,3",  # 13-inch 2020 (2 TB3)
+    "MacBookAir8,1",   # Air 2018, Intel UHD Graphics 617
+    "MacBookAir8,2",   # Air 2019, Intel UHD Graphics 617
+    "MacBookAir9,1",   # Air 2020 Intel, Intel Iris Plus
+    "MacBookPro16,3",  # 13-inch 2020 (2 TB3), Intel Iris Plus Graphics 645
 }
 
-# T2 Mac models that do not have an Intel iGPU, or where iGPU injection
-# is not required/recommended.
+# T2 Mac models that do not have an Intel iGPU, or where iGPU injection is not required/recommended.
 _T2_NO_IGPU_MODELS = {
     "iMacPro1,1",      # iMac Pro 2017
 }
 
 _T2_TOUCH_BAR_MODELS = {
-    "MacBookPro15,2",  # 13-inch 2018 (4 TB3)
-    "MacBookPro15,4",  # 13-inch 2019 (2 TB3)
-    "MacBookPro16,3",  # 13-inch 2020 (2 TB3)
-    "MacBookPro15,1",  # 15-inch 2018 (UHD630 + Radeon)
-    "MacBookPro15,3",  # 15-inch 2019 (UHD630 + Radeon)
-    "MacBookPro16,1",  # 16-inch 2019 (UHD630 + Radeon)
-    "MacBookPro16,4",  # 16-inch 2019 CTO (UHD630 + Radeon)
+    "MacBookPro15,2",  # 13-inch 2018
+    "MacBookPro15,4",  # 13-inch 2019
+    "MacBookPro16,3",  # 13-inch 2020
+    "MacBookPro15,1",  # 15-inch 2018
+    "MacBookPro15,3",  # 15-inch 2019
+    "MacBookPro16,1",  # 16-inch 2019
+    "MacBookPro16,4",  # 16-inch 2019 CTO
 }
 
 class BuildSecurity:
