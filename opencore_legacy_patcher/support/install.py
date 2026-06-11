@@ -124,38 +124,42 @@ class tui_disk_installation:
             return False
 
         # FIX: check=True bei kritischen Dateioperationen hinzugefügt, und redundantes Path() entfernt
+        # FIX: Dateioperationen als Root ausführen, da das Volume als Root gemountet ist
         try:
             if (mount_path / "EFI/OC").exists():
                 logging.info("Removing preexisting EFI/OC folder")
-                subprocess.run(["/bin/rm", "-rf", mount_path / "EFI/OC"], check=True)
+                subprocess_wrapper.run_as_root(["/bin/rm", "-rf", mount_path / "EFI/OC"])
 
             if (mount_path / "System").exists():
                 logging.info("Removing preexisting System folder")
-                subprocess.run(["/bin/rm", "-rf", mount_path / "System"], check=True)
+                subprocess_wrapper.run_as_root(["/bin/rm", "-rf", mount_path / "System"])
 
             if (mount_path / "boot.efi").exists():
                 logging.info("Removing preexisting boot.efi")
-                subprocess.run(["/bin/rm", mount_path / "boot.efi"], check=True)
+                subprocess_wrapper.run_as_root(["/bin/rm", mount_path / "boot.efi"])
 
             logging.info("Copying OpenCore onto EFI partition")
-            subprocess.run(["/bin/mkdir", "-p", mount_path / "EFI"], check=True)
-            subprocess.run(["/bin/cp", "-r", self.constants.opencore_release_folder / "EFI/OC", mount_path / "EFI/OC"], check=True)
-            subprocess.run(["/bin/cp", "-r", self.constants.opencore_release_folder / "System", mount_path / "System"], check=True)
+            # Von subprocess.run zu subprocess_wrapper.run_as_root geändert
+            subprocess_wrapper.run_as_root(["/bin/mkdir", "-p", mount_path / "EFI"])
+            subprocess_wrapper.run_as_root(["/bin/cp", "-r", str(self.constants.opencore_release_folder / "EFI/OC"), str(mount_path / "EFI/OC")])
+            subprocess_wrapper.run_as_root(["/bin/cp", "-r", str(self.constants.opencore_release_folder / "System"), str(mount_path / "System")])
 
             if (self.constants.opencore_release_folder / "boot.efi").exists():
-                subprocess.run(["/bin/cp", self.constants.opencore_release_folder / "boot.efi", mount_path / "boot.efi"], check=True)
+                subprocess_wrapper.run_as_root(["/bin/cp", str(self.constants.opencore_release_folder / "boot.efi"), str(mount_path / "boot.efi")])
 
             if self.constants.boot_efi is True:
                 logging.info("Converting Bootstrap to BOOTx64.efi")
                 if (mount_path / "EFI/BOOT").exists():
-                    subprocess.run(["/bin/rm", "-rf", mount_path / "EFI/BOOT"], check=True)
-                (mount_path / "EFI/BOOT").mkdir(exist_ok=True)
-                subprocess.run(["/bin/mv", mount_path / "System/Library/CoreServices/boot.efi", mount_path / "EFI/BOOT/BOOTx64.efi"], check=True)
-                subprocess.run(["/bin/rm", "-rf", mount_path / "System"], check=True)
+                    subprocess_wrapper.run_as_root(["/bin/rm", "-rf", mount_path / "EFI/BOOT"])
                 
-        except subprocess.CalledProcessError as e:
+                # Wichtig: mount_path.mkdir() würde auch ohne Root laufen, daher der Wrapper:
+                subprocess_wrapper.run_as_root(["/bin/mkdir", "-p", mount_path / "EFI/BOOT"])
+                subprocess_wrapper.run_as_root(["/bin/mv", str(mount_path / "System/Library/CoreServices/boot.efi"), str(mount_path / "EFI/BOOT/BOOTx64.efi")])
+                subprocess_wrapper.run_as_root(["/bin/rm", "-rf", mount_path / "System"])
+                
+        except Exception as e: # Allgemeinerer Catch, falls run_as_root kein CalledProcessError wirft
             logging.error(f"File operation failed during installation: {e}")
-            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.exception("Stack Trace:") 
             logging.info("Please try again later.")
             return False
             sys.exit(3)
