@@ -102,6 +102,7 @@ SupportedSMBIOS = [
     "MacPro3,1",
     "MacPro4,1",
     "MacPro5,1",
+    "MacPro6,1",
     # "MacPro7,1"
     # Xserve
     "Xserve2,1",
@@ -384,15 +385,8 @@ T2Macs = [
     "MacBookPro15,2",
     "MacBookPro15,3",
     "MacBookPro15,4",
-    "MacBookPro16,1",
-    "MacBookPro16,2",
     "MacBookPro16,3",
     "MacBookPro16,4",
     "Macmini8,1",
-    "MacPro7,1",
-    "iMac19,1",
-    "iMac19,2",
-    "iMac20,1",
-    "iMac20,2",
     "iMacPro1,1",
 ]
