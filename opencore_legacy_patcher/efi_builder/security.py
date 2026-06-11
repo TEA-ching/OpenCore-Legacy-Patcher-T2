@@ -229,14 +229,22 @@ class BuildSecurity:
             logging.info(f"- {self.model}: Injecting connector-less Intel UHD Graphics 617 and Amber Lake DeviceProperties (Tahoe fix)")
             gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
             gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxgl=1 igfxmetal=1")
+            # FIX: Sicherstellen, dass bestehende Argumente ausgelesen und ERWEITERT werden
+            current_args = self.config["NVRAM"]["Add"].get(APPLE_NVRAM_UUID, {}).get("boot-args", "")
+            if "igfxgl=1" not in current_args:
+                new_args = f"{current_args} igfxgl=1 igfxmetal=1".strip()
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", new_args)
             logging.info("  > Added igfxgl=1 igfxmetal=1 (LP Display sync fix)")
 
         elif self.model in _T2_IRIS_PLUS_MODELS:
             logging.info(f"- {self.model}: Injecting connector-less Iris Plus DeviceProperties (Tahoe fix)")
             gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
             gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxgl=1 igfxmetal=1")
+            # FIX: Auch hier erweitern statt überschreiben
+            current_args = self.config["NVRAM"]["Add"].get(APPLE_NVRAM_UUID, {}).get("boot-args", "")
+            if "igfxgl=1" not in current_args:
+                new_args = f"{current_args} igfxgl=1 igfxmetal=1".strip()
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", new_args)
             logging.info("  > Added igfxgl=1 igfxmetal=1 (LP Display sync fix)")
 
 
@@ -246,7 +254,8 @@ class BuildSecurity:
             gfx["device-id"]           = binascii.unhexlify("9B3E0000")  # 0x3E9B0000 LE
         else:
             logging.error(f"FATAL: Model {self.model} lacks specific GPU patch data.")
-            return
+            logging.info("Please report this issue and check for available updates for OpenCore Legacy Patcher T2 that may fix this bug.")
+            sys.exit(3)
         try:
             # ── Common framebuffer patches (all T2 iGPU models) ──────────────
             gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
