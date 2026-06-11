@@ -440,29 +440,35 @@ class BuildMiscellaneous:
             except Exception as e:
                 logging.info(f"- {self.model}: Great news! We tried disabling USB-Map.kext and USN-Map-Tahoe.kext but we didn't found them.")
                 logging.info("You don't have to worry about this message.")
-            logging.info("Enabling AppleUSBHostPort patches")
-            self.config["Kernel"]["Patch"].extend([
-                {
-                    "Arch": "x86_64",
-                    "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C1)",
-                    "Enabled": True,
-                    "Identifier": "com.apple.iokit.IOUSBHostFamily",
-                    "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC1EPS_",
-                    "Find": b"",  # Dynamically resolved by OpenCore's linker parser
-                    "Replace": b"\xC3",  # ret (Immediately returns, bypassing virtual JMP)
-                    "MinKernel": "25.0.0"
-                },
-                {
-                    "Arch": "x86_64",
-                    "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C2)",
-                    "Enabled": True,
-                    "Identifier": "com.apple.iokit.IOUSBHostFamily",
-                    "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC2EPS_",
-                    "Find": b"",
-                    "Replace": b"\xC3",  # ret
-                    "MinKernel": "25.0.0"
-                }
-            ])
+            try:
+                logging.info("Enabling AppleUSBHostPort patches")
+                self.config["Kernel"]["Patch"].extend([
+                    {
+                        "Arch": "x86_64",
+                        "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C1)",
+                        "Enabled": True,
+                        "Identifier": "com.apple.iokit.IOUSBHostFamily",
+                        "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC1EPS_",
+                        "Find": b"",  # Dynamically resolved by OpenCore's linker parser
+                        "Replace": b"\xC3",  # ret (Immediately returns, bypassing virtual JMP)
+                        "MinKernel": "25.0.0"
+                    },
+                    {
+                        "Arch": "x86_64",
+                        "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C2)",
+                        "Enabled": True,
+                        "Identifier": "com.apple.iokit.IOUSBHostFamily",
+                        "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC2EPS_",
+                        "Find": b"",
+                        "Replace": b"\xC3",  # ret
+                        "MinKernel": "25.0.0"
+                    }
+                ])
+            except Exception as e:
+                logging.error("We failed to enable AppleUSBHostPort patches due to the following error:")
+                logging.exception("Stack Trace:")
+                logging.info("Please try again later.")
+                sys.exit(3)
 
         try:
             APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
