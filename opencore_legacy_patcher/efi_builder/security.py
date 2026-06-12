@@ -70,7 +70,11 @@ class BuildSecurity:
         self.config: dict = config
         self.constants: constants.Constants = global_constants
         self.computer: device_probe.Computer = self.constants.computer
+        
+        # ── Global Hardware & OS Targets Scopes ───────────────────────
         self.is_tahoe_target: bool = False
+        self.is_ice_lake: bool = (self.model == "MacBookAir9,1")
+        self.is_mac_mini: bool = (self.model == "Macmini8,1")
 
         self._build()
 
@@ -208,9 +212,8 @@ class BuildSecurity:
     # T2 security helpers
     # ------------------------------------------------------------------
 
-    
     def _apply_t2_graphics_injection(self) -> None:
-        """Inject connector-less Intel iGPU DeviceProperties for T2 Macs."""
+        """Inject integrated Intel iGPU DeviceProperties for T2 Macs."""
         if self._should_skip_t2_graphics_injection() or not self._requires_t2_graphics_injection():
             logging.info(f"- Skipping Intel graphics injection for {self.model} (no iGPU or not required)")
             return
@@ -224,45 +227,57 @@ class BuildSecurity:
 
         APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
 
-        if self.model in _T2_LOW_POWER_MODELS:
-            logging.info(f"- {self.model}: Injecting connector-less Intel UHD Graphics 617 and Amber Lake DeviceProperties (Tahoe fix)")
+        # ── 1. Platform & Device ID Allocation ────────────────────────────
+        if self.is_ice_lake:
+            # Native Ice Lake LP Empty/Headless Framebuffer Layout (AppleIntelIceLakeGraphics)
+            logging.info(f"- {self.model}: Injecting connector-less Ice Lake Iris Plus DeviceProperties (Tahoe fix)")
+            gfx["AAPL,ig-platform-id"] = binascii.unhexlify("02005C8A")  # 0x8A5C0002 LE
+            gfx["device-id"]           = binascii.unhexlify("5C8A0000")  # 0x8A5C0000 LE
+            
+        elif self.model in _T2_LOW_POWER_MODELS or self.model in _T2_IRIS_PLUS_MODELS:
+            # Coffee Lake U-Series Empty/Headless Layout (Intel Iris Plus 645/655)
+            logging.info(f"- {self.model}: Injecting connector-less Iris Plus / Amber Lake DeviceProperties (Tahoe fix)")
             gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
             gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
-            # FIX: Sicherstellen, dass bestehende Argumente ausgelesen und ERWEITERT werden
-            current_args = self.config["NVRAM"]["Add"].get(APPLE_NVRAM_UUID, {}).get("boot-args", "")
-            if "igfxgl=1" not in current_args:
-                new_args = f"{current_args} igfxgl=1 igfxmetal=1".strip()
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", new_args)
-            logging.info("  > Added igfxgl=1 igfxmetal=1 (LP Display sync fix)")
-
-        elif self.model in _T2_IRIS_PLUS_MODELS:
-            logging.info(f"- {self.model}: Injecting connector-less Iris Plus DeviceProperties (Tahoe fix)")
-            gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
-            gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
-            # FIX: Auch hier erweitern statt überschreiben
-            current_args = self.config["NVRAM"]["Add"].get(APPLE_NVRAM_UUID, {}).get("boot-args", "")
-            if "igfxgl=1" not in current_args:
-                new_args = f"{current_args} igfxgl=1 igfxmetal=1".strip()
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", new_args)
-            logging.info("  > Added igfxgl=1 igfxmetal=1 (LP Display sync fix)")
-
+            
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxgl=1 igfxmetal=1")
+            logging.info("  > Appended LP display sync flags safely.")
 
         elif self.model in _T2_UHD630_MODELS:
+            # Coffee Lake H-Series Empty/Headless Layout (Intel UHD 630)
             logging.info(f"- {self.model}: Injecting connector-less UHD630 DeviceProperties (Tahoe fix)")
             gfx["AAPL,ig-platform-id"] = binascii.unhexlify("06009B3E")  # 0x3E9B0006 LE
             gfx["device-id"]           = binascii.unhexlify("9B3E0000")  # 0x3E9B0000 LE
         else:
             logging.error(f"FATAL: Model {self.model} lacks specific GPU patch data.")
-            logging.info("Please report this issue and check for available updates for OpenCore Legacy Patcher T2 that may fix this bug.")
             sys.exit(3)
+
+        # ── 2. Structural Framebuffer Overrides ───────────────────────────
         try:
-            # ── Common framebuffer patches (all T2 iGPU models) ──────────────
             gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
-            gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
-            gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  # Unused/connector-less
+            
+            # Use instance properties to identify single-GPU environments driving physical outputs
+            if self.is_mac_mini or self.is_ice_lake:
+                # iGPU-only units need an active display line to drive actual panels!
+                gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
+                gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  # Digital DisplayPort fallback
+                logging.info(f"  > {self.model}: Enforced active physical mapping layout on con0 (iGPU-only fix)")
+            elif self.model in _T2_UHD630_MODELS:
+                # Dual-GPU setups securely map physical video directly through AMD dGPU
+                gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
+                gfx["framebuffer-con0-type"]    = binascii.unhexlify("00000000")  # Absolute Headless/Disabled
+                logging.info(f"  > {self.model}: Enforced strict headless isolation structure on con0 (dGPU Present)")
+            else:
+                # Standard physical mapping fallback layout for native U-series configurations
+                gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
+                gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  # Digital DisplayPort
+                logging.info(f"  > {self.model}: Standard physical connector mapping applied")
+
+            # Safe universal memory caps
             gfx["framebuffer-stolenmem"]    = binascii.unhexlify("00003001")  # 19 MB
             gfx["framebuffer-fbmem"]        = binascii.unhexlify("00009000")  # 9 MB
-            logging.info("  > T2 iGPU connector-less injection complete")
+            logging.info("  > T2 iGPU configuration parameters applied successfully.")
+            
         except Exception as e:
             logging.error(f"Whoops, injecting common framebuffer patches for {self.model} failed because of the following error:")
             logging.exception("Stack Trace:")
@@ -273,9 +288,10 @@ class BuildSecurity:
         """Apply mandatory security overrides required for T2 Macs to boot."""
         logging.info("- Applying T2 memory descriptor overrides (T2 ONLY)")
 
+        # Configure raw boundaries cleanly
         self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
         self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
-        self.config["Misc"]["Security"]["ApECID"]          = int(0)
+        self.config["Misc"]["Security"]["ApECID"]          = 0
 
         self._apply_t2_amfi_boot_args(apple_nvram_uuid)
         self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 -v keepsyms=1 nvme_shutdown_timestamp=0")
@@ -297,26 +313,24 @@ class BuildSecurity:
         back to an interactive CLI prompt.
         """
         app = wx.GetApp()
-        # Ensure wx is running and we are calling from a worker thread
         if app and app.IsMainLoopRunning():
             logging.info("  > Active GUI environment detected. Thread proxying to Main Thread.")
-            
-            # Use a thread Event to halt this worker thread until the user interacts with the GUI
             evt = threading.Event()
-            
-            # wx.CallAfter safely pushes the execution onto the main AppKit thread loop
             wx.CallAfter(self._unknown_target_gui, apple_nvram_uuid, evt)
-            
-            # Sleep worker thread until Main Thread signals it's done
             evt.wait()
         else:
             logging.info("  > Headless/CLI environment detected. Falling back to terminal input.")
-            self._unknown_target_cli(apple_nvram_uuid)
+            # Map headless prompt if running via terminal fallback
+            user_input = input("Target OS is macOS 26 Tahoe or newer? (y/n): ").strip().lower()
+            if user_input == 'y':
+                self.is_tahoe_target = True
+                self._apply_cryptex_patches(apple_nvram_uuid)
+            else:
+                self.is_tahoe_target = False
 
     def _unknown_target_gui(self, apple_nvram_uuid: str, event: threading.Event) -> None:
-        """Handles target selection via a wxWidgets modal dialog (EXCECUTED ON MAIN THREAD)."""
+        """Handles target selection via a wxWidgets modal dialog (EXECUTED ON MAIN THREAD)."""
         try:
-            # We pass a valid parent if available, or None if TopWindow is missing
             parent = wx.GetApp().GetTopWindow()
             dlg = wx.Dialog(parent, title="Unknown Target", size=(450, 250))
             sizer = wx.BoxSizer(wx.VERTICAL)
@@ -341,7 +355,6 @@ class BuildSecurity:
             dlg.ShowModal()
             dlg.Destroy()
         finally:
-            # Crucial: Unblock the worker thread regardless of dialog outcome or failures
             event.set()
 
     def _handle_selection(self, dialog: wx.Dialog, apple_nvram_uuid: str, target_is_tahoe: bool) -> None:
@@ -360,12 +373,17 @@ class BuildSecurity:
         if self.is_tahoe_target is True:
             logging.info("Injecting cryptex=0 cs_allow_invalid=1 for macOS 26 Tahoe")
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
-        else:
-            return
-    
+
     def _apply_t2_kernel_patches_tahoe(self) -> None:
         """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
         if not self._is_t2_mac():
+            return
+            
+        # ── CRITICAL SECURITY GATE ────────────────────────────────────
+        # Stop execution here if target isn't verified as macOS 26 Tahoe.
+        # Prevents kernel patching older OS installations.
+        if not self.is_tahoe_target:
+            logging.info("- Skipping Tahoe Kernel patches (Target OS verified as older version)")
             return
 
         logging.info("- Injecting T2-specific Kernel patches for macOS Tahoe")
@@ -382,12 +400,10 @@ class BuildSecurity:
                 "Comment": "Bypass T2 USB handshake (Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                # Matches: MOV RAX, qword ptr [RBX]; MOV RDI, RBX; CALL qword ptr [RAX + 0x38]
                 "Find": binascii.unhexlify("488B034889DFFF5038"),
-                "Mask": b"", # Exact binary instruction match; no wildcards needed
+                "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "25.0.0",
-                # Replaces 'FF 50 38' (CALL) with '31C090' (XOR EAX,EAX; NOP) to force return code 0 (Success)
                 "Replace": binascii.unhexlify("488B034889DF31C090"),
                 "ReplaceMask": b"",
                 "Skip": 0
@@ -400,12 +416,10 @@ class BuildSecurity:
                 "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                # Matches: PUSH RBP; MOV RBP, RSP; MOV RAX, qword ptr [RDI + 0x158]
                 "Find": binascii.unhexlify("554889E5488B8758010000"),
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "25.0.0",
-                # Replaces structure load with 'MOV RAX, RDI; NOP; NOP; NOP; NOP' to spoof a valid hub node response
                 "Replace": binascii.unhexlify("554889E54889F890909090"),
                 "ReplaceMask": b"",
                 "Skip": 0
@@ -413,36 +427,28 @@ class BuildSecurity:
         
         if self.model in _T2_TOUCH_BAR_MODELS:
             logging.info("No touch bar patches available for now. Don't worry - your system should boot anyways.")
-            logging.info("If it doesn't, please open an issue about the kernel panic that appears on your screen and include also which version of the patcher are you using.")
-            logging.info("Keine Touch Bar Patches sind verfügbar. Macht euch keine Sorge - das System soll trotzdem starten.")
-            logging.info("Falls den Mac gar nicht hochfährt und stattdessen einen Kernel Panic zeigt, Sie müssen das Problem melden und die Meldung muss auch die Version der Patcher, \n\ndie Sie gerade verwenden, enthalten.")
     
         """Injects corecrypto binary shims to bypass FIPS Kernel POST verification failures."""
         logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets")
     
         corecrypto_patch = {
             "Arch": "x86_64",
-            "Base": "",  # Clear this out so it relies purely on the robust unique hex match
+            "Base": "",
             "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
             "Count": 1,
             "Enabled": True,
-            # Matches the exact CMP and JBE instructions we found at 0xffffff8000333c28
             "Find": binascii.unhexlify("4883F98E767B"), 
             "Identifier": "com.apple.kec.corecrypto",
             "Limit": 0,
-            "Mask": b"",  # No mask needed since our Find sequence is a direct, concrete binary match
+            "Mask": b"",
             "MaxKernel": "",
             "MinKernel": "25.0.0", 
-            # Replaces the 2-byte branch '76 7B' (JBE) with '90 90' (NOP NOP) to slide safely past the panic trigger
             "Replace": binascii.unhexlify("4883F98E9090"), 
             "ReplaceMask": b"",
             "Skip": 0
         }
-    
-        if "Patch" not in self.config["Kernel"]:
-            self.config["Kernel"]["Patch"] = []
             
-        self.config["Kernel"]["Patch"].append(corecrypto_patch)
+        kernel_patches.append(corecrypto_patch)
         logging.info("  > corecrypto FIPS shim appended to Kernel->Patch array successfully.")
 
     # ------------------------------------------------------------------
@@ -475,6 +481,8 @@ class BuildSecurity:
             # 4. Hard Structural Boundaries Pass
             logging.info("- Final T2 verification pass (Enforcing absolute boundaries)")
             self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
+            
+            # Explicitly set OpenCore integer properties natively without cast anomalies
             self.config["Misc"]["Security"]["ApECID"]          = 0
             self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
 
@@ -487,7 +495,6 @@ class BuildSecurity:
         if self.constants.sip_status is False or self.constants.custom_sip_value:
             logging.info("- Non-T2 Mac: SIP lowered — applying SIP-related settings")
             
-            # Electron app crash fix under modified SIP
             self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
 
             if self.constants.wxpython_variant is True:
