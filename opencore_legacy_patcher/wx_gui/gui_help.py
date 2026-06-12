@@ -58,10 +58,10 @@ class HelpFrame(wx.Frame):
         # Define external target items using structured tuples instead of a dict mapping loop
         # Pulls from constants.py configuration bindings cleanly
         resource_links = [
-            ("Dortania's own Official Guide", self.constants.guide_link),
-            ("Mykola's Community Discord Server", self.constants.discord_link),
             ("View official GitHub Issues", getattr(self.constants, "github_issues_link", "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")),
             ("Join official GitHub Discussions", getattr(self.constants, "github_discussions_link", "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/discussions")),
+            ("Dortania's Guide", self.constants.guide_link),
+            ("Community Discord Server", self.constants.discord_link),
         ]
 
         # 3. Dynamic External Link Button Generation
