@@ -20,6 +20,7 @@ from ..wx_gui import (
     gui_support,
     gui_sys_patch_display
 )
+
 class GeminiWebView(wx.Frame):
     def __init__(self, parent, title, url="https://gemini.google.com"):
         super().__init__(parent, title=title, size=(1000, 700))
@@ -79,13 +80,7 @@ class InstallOCFrame(wx.Frame):
     def _generate_elements(self) -> None:
         """
         Display indeterminate progress bar while collecting disk information
-
-        Format:
-            - Title label:        Install OpenCore
-            - Text:               Fetching information on local disks...
-            - Progress bar:       {indeterminate}
         """
-
         # Title label: Install OpenCore
         title_label = wx.StaticText(self, label="Install OpenCore", pos=(-1,5))
         title_label.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
@@ -113,8 +108,6 @@ class InstallOCFrame(wx.Frame):
         Fetch information on local disks safely using local scoping 
         to prevent race conditions and dictionary manipulation.
         """
-        # 1. Fetch data into a localized variable. 
-        # Shared state (self.available_disks) is not touched yet.
         raw_disks = install.tui_disk_installation(self.constants).list_disks()
         if not raw_disks:
             self.available_disks = {}
@@ -125,7 +118,6 @@ class InstallOCFrame(wx.Frame):
         if current_version < (10, 12):
             logging.info(f"Detected legacy macOS version {current_version}. Cleaning up output safely...")
             
-            # 2. Build a fresh, filtered dictionary instead of mutating in place
             ignore = ["disk image", "read-only", "virtual"]
             filtered_disks = {}
             
@@ -134,11 +126,9 @@ class InstallOCFrame(wx.Frame):
                 if not any(bad_string in disk_name for bad_string in ignore):
                     filtered_disks[disk_id] = disk_info
             
-            # 3. Publish the sanitized data to the instance variable all at once (Atomic operation)
             self.available_disks = filtered_disks
         else:
             logging.info(f"Detected macOS {current_version}. No legacy cleanup required.")
-            # Publish directly since no filtering is needed
             self.available_disks = raw_disks
 
 
@@ -172,24 +162,19 @@ class InstallOCFrame(wx.Frame):
         gpt_note.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
         gpt_note.Centre(wx.HORIZONTAL)
 
-        # Add buttons for each disk
         if self.available_disks:
-            # Only show booted disk if building for host
             disk_root = self.constants.booted_oc_disk if self.constants.custom_model is None else None
             if disk_root:
-                # disk6s1 -> disk6
                 disk_root = self.constants.booted_oc_disk.strip("disk")
                 disk_root = "disk" + disk_root.split("s")[0]
                 logging.info(f"Checking if booted disk is present: {disk_root}")
 
-            # Add buttons for each disk
             items = len(self.available_disks)
             longest_label = max((len(self.available_disks[disk]['disk']) + len(self.available_disks[disk]['name']) + len(str(self.available_disks[disk]['size']))) for disk in self.available_disks)
             longest_label = longest_label * 9
             spacer = 0
             logging.info("Available disks:")
             for disk in self.available_disks:
-                # Create a button for each disk
                 logging.info(f"- {self.available_disks[disk]['disk']} - {self.available_disks[disk]['name']} - {self.available_disks[disk]['size']}")
                 disk_button = wx.Button(dialog, label=f"{self.available_disks[disk]['disk']} - {self.available_disks[disk]['name']} - {self.available_disks[disk]['size']}", size=(longest_label ,30), pos=(-1, gpt_note.GetPosition()[1] + gpt_note.GetSize()[1] + 5 + spacer))
                 disk_button.Centre(wx.HORIZONTAL)
@@ -199,7 +184,6 @@ class InstallOCFrame(wx.Frame):
                 spacer += 25
 
             if disk_root:
-                # Add note: "Note: Blue represent the disk OpenCore is currently booted from"
                 disk_label = wx.StaticText(dialog, label="Note: Blue represent the disk OpenCore is currently booted from", pos=(-1, disk_button.GetPosition()[1] + disk_button.GetSize()[1] + 5))
                 disk_label.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
                 disk_label.Centre(wx.HORIZONTAL)
@@ -207,22 +191,18 @@ class InstallOCFrame(wx.Frame):
                 disk_label = wx.StaticText(dialog, label="", pos=(-1, disk_button.GetPosition()[1] + 15))
                 disk_label.SetFont(gui_support.font_factory(10, wx.FONTWEIGHT_NORMAL))
         else:
-            # Text: Failed to find any applicable disks
             disk_label = wx.StaticText(dialog, label="Failed to find any applicable disks", pos=(-1, gpt_note.GetPosition()[1] + gpt_note.GetSize()[1] + 5))
             disk_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_BOLD))
             disk_label.Centre(wx.HORIZONTAL)
 
-        # Add button: Search for disks again
         search_button = wx.Button(dialog, label="Search for disks again", size=(150,30), pos=(-1, disk_label.GetPosition()[1] + disk_label.GetSize()[1] + 5))
         search_button.Centre(wx.HORIZONTAL)
         search_button.Bind(wx.EVT_BUTTON, self.on_reload_frame)
 
-        # Add button: Return to main menu
         return_button = wx.Button(dialog, label="Return to Main Menu", size=(150,30), pos=(-1, search_button.GetPosition()[1] + 20))
         return_button.Centre(wx.HORIZONTAL)
         return_button.Bind(wx.EVT_BUTTON, self.on_return_to_main_menu)
 
-        # Set size
         dialog.SetSize((-1, return_button.GetPosition()[1] + return_button.GetSize()[1] + 40))
         dialog.ShowWindowModal()
         self.dialog = dialog
@@ -232,10 +212,8 @@ class InstallOCFrame(wx.Frame):
         """
         List volumes on disk
         """
-
         self.dialog.Close()
 
-        # Create dialog
         dialog = wx.Dialog(
             self,
             title=f"Volumes on {disk}",
@@ -243,7 +221,6 @@ class InstallOCFrame(wx.Frame):
             size=(300, 300)
         )
 
-        # Add text: "Volumes on {disk}"
         text_label = wx.StaticText(dialog, label=f"Volumes on {disk}", pos=(-1, 10))
         text_label.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
         text_label.Centre(wx.HORIZONTAL)
@@ -263,15 +240,11 @@ class InstallOCFrame(wx.Frame):
                 disk_button.SetDefault()
             spacer += 25
 
-        # Add button: Return to main menu
         return_button = wx.Button(dialog, label="Return to Main Menu", size=(150,30), pos=(-1, disk_button.GetPosition()[1] + disk_button.GetSize()[1]))
         return_button.Centre(wx.HORIZONTAL)
         return_button.Bind(wx.EVT_BUTTON, self.on_return_to_main_menu)
 
-        # Set size
         dialog.SetSize((-1, return_button.GetPosition()[1] + return_button.GetSize()[1] + 40))
-
-        # Show dialog
         dialog.ShowWindowModal()
         self.dialog = dialog
 
@@ -282,7 +255,6 @@ class InstallOCFrame(wx.Frame):
         """
         self.dialog.Close()
 
-        # Create dialog
         dialog = wx.Dialog(
             self,
             title=f"Installing OpenCore to {partition}",
@@ -290,30 +262,23 @@ class InstallOCFrame(wx.Frame):
             size=(370, 200)
         )
 
-        # Add text: "Installing OpenCore to {partition}"
         text_label = wx.StaticText(dialog, label=f"Installing OpenCore to {partition}", pos=(-1, 10))
         text_label.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
         text_label.Centre(wx.HORIZONTAL)
 
-        # Read-only text box: {empty}
         text_box = wx.TextCtrl(dialog, value="", pos=(-1, text_label.GetPosition()[1] + text_label.GetSize()[1] + 10), size=(350, 200), style=wx.TE_READONLY | wx.TE_MULTILINE | wx.TE_RICH2)
         text_box.Centre(wx.HORIZONTAL)
         self.text_box = text_box
 
-        # Add button: Return to main menu
         return_button = wx.Button(dialog, label="Return to Main Menu", size=(150,30), pos=(-1, text_box.GetPosition()[1] + text_box.GetSize()[1] + 10))
         return_button.Centre(wx.HORIZONTAL)
         return_button.Bind(wx.EVT_BUTTON, self.on_return_to_main_menu)
         return_button.Disable()
 
-        # Set size
         dialog.SetSize((370, return_button.GetPosition()[1] + return_button.GetSize()[1] + 40))
-
-        # Show dialog
         dialog.ShowWindowModal()
         self.dialog = dialog
 
-        # Install OpenCore
         self._invoke_install_oc(partition)
         return_button.Enable()
 
@@ -348,10 +313,7 @@ class InstallOCFrame(wx.Frame):
                 return
 
             elif not self.constants.custom_model:
-                # The URL to the instructions repository
                 url = "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2-Instructions-for-T2-Macs/tree/main"
-                
-                # This command opens the link in your default browser (Safari, Chrome, etc.)
                 webbrowser.open(url)
                 gui_support.RestartHost(self).restart(message="OpenCore has finished installing to disk.\n\nYou will need to reboot and hold the Option key and select OpenCore/Boot EFI's option.\n\nWould you like to reboot?\n\nIn some cases, instead of OpenCore it is labeled as Windows on T2 Macs if you\n\nare running Boot Camp on your Mac.")
             else:
@@ -364,7 +326,7 @@ class InstallOCFrame(wx.Frame):
         else:
             if self.constants.update_stage != gui_support.AutoUpdateStages.INACTIVE:
                 self.constants.update_stage = gui_support.AutoUpdateStages.FINISHED
-            # Setup the Error Dialog
+            
             error_msg = "OpenCore installation failed.\n\nWould you like to report this issue or ask Gemini for help?"
             help_dialog = wx.RichMessageDialog(
                 self, 
@@ -373,56 +335,51 @@ class InstallOCFrame(wx.Frame):
                 wx.OK | wx.CANCEL | wx.AUX1_BUTTON | wx.ICON_ERROR
             )
             
-            # Map buttons: OK -> Report, Cancel -> Close, Aux -> Gemini
             help_dialog.SetOKCancelLabels("Report Issue", "Close")
             help_dialog.SetAuxiliaryLabel("Ask Gemini")
 
             response = help_dialog.ShowModal()
 
             if response == wx.ID_OK:
-                # Open GitHub in system browser
                 webbrowser.open("https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")
             
             elif response == wx.ID_AUX1:
-                # Open Gemini in the internal WebView
                 gemini_window = GeminiWebView(self, title="Gemini AI Assistant")
                 gemini_window.Show()
 
 
     def _install_oc(self, partition: dict) -> None:
         """
-        Install OpenCore to disk
+        Install OpenCore to disk safely
         """
         logging.info(f"Installing OpenCore to {partition}")
 
         logger = logging.getLogger()
-        # 1. Create and store the handler
         my_handler = gui_support.ThreadHandler(self.text_box)
         logger.addHandler(my_handler)
 
         try:
-            # --- THE MISSING LINK ---
-            # This triggers the actual backend disk operations
-            install.tui_disk_installation(self.constants).install_opencore(partition)
+            # FIX: Capture the boolean return value from the backend.
+            # Do not assume execution was successful just because no unhandled exception crashed Python.
+            install_success = install.tui_disk_installation(self.constants).install_opencore(partition)
             
-            # Flip the success switch so the UI knows to show the Reboot popup
-            self.result = True
-            logging.info("OpenCore transfer complete")
+            if install_success:
+                self.result = True
+                logging.info("OpenCore transfer complete")
+            else:
+                self.result = False
+                logging.error("Installation failed during internal file copy or mount routines.")
         
         except Exception as e:
             self.result = False
-            logging.error(f"Installation failed: {e}")
+            logging.error(f"Installation encountered a critical error: {e}")
             logging.error(traceback.format_exc())
         
         finally:
-            # 2. Safely remove the handler (fixes the IndexError/RuntimeError)
             if my_handler in logger.handlers:
                 logger.removeHandler(my_handler)
 
     def on_reload_frame(self, event: wx.Event = None) -> None:
-        """
-        Reload frame
-        """
         self.Destroy()
         frame = InstallOCFrame(
             None,
@@ -434,9 +391,6 @@ class InstallOCFrame(wx.Frame):
 
 
     def on_return_to_main_menu(self, event: wx.Event = None) -> None:
-        """
-        Return to main menu
-        """
         main_menu_frame = gui_main_menu.MainFrame(
             None,
             title=self.title,
@@ -445,7 +399,3 @@ class InstallOCFrame(wx.Frame):
         )
         main_menu_frame.Show()
         self.Destroy()
-
-
-
-
