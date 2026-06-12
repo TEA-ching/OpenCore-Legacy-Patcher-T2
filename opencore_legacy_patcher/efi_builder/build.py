@@ -221,7 +221,7 @@ class BuildOpenCore:
             Path(self.constants.opencore_zip_copied).unlink()
         if Path(self.constants.opencore_release_folder).exists():
             logging.info("Deleting old copy of OpenCore folder")
-            shutil.rmtree(self.constants.opencore_release_folder, on_exc=rmtree_handler)
+            shutil.rmtree(self.constants.opencore_release_folder, onexc=rmtree_handler)
 
         logging.info("")
         logging.info(f"- Adding OpenCore v{self.constants.opencore_version} {'DEBUG' if self.constants.opencore_debug is True else 'RELEASE'}")
