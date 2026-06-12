@@ -6,6 +6,7 @@ import logging
 import plistlib
 import subprocess
 import re
+import sys
 
 from pathlib import Path
 
