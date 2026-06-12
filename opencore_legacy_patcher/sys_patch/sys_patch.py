@@ -387,15 +387,17 @@ class PatchSysVolume:
                                 destination_folder_path = str(self.mount_location_data) + remove_patch_directory
                             remove_file(destination_folder_path, remove_patch_file)
 
-
             for method_install in [PatchType.OVERWRITE_SYSTEM_VOLUME, PatchType.OVERWRITE_DATA_VOLUME, PatchType.MERGE_SYSTEM_VOLUME, PatchType.MERGE_DATA_VOLUME]:
                 if method_install not in required_patches[patch]:
                     continue
 
-                for install_patch_directory in list(required_patches[patch][method_install]):
+                # Isolate keys into a list to prevent dictionary size mutation errors mid-loop
+                directories = list(required_patches[patch][method_install].keys())
+                for install_patch_directory in directories:
                     logging.info(f"- Handling Installs in: {install_patch_directory}")
-                    for install_file in list(required_patches[patch][method_install][install_patch_directory]):
-                        # FIX: Schlüssel-Existenzprüfung hinzugefügt, um KeyError durch die .pop() Methode zu verhindern
+                    
+                    files = list(required_patches[patch][method_install][install_patch_directory].keys())
+                    for install_file in files:
                         if install_file not in required_patches[patch][method_install][install_patch_directory]:
                             continue
                             
@@ -420,7 +422,7 @@ class PatchSysVolume:
                                 self.constants.needs_to_open_preferences = True
 
                         if destination_folder_path != updated_destination_folder_path:
-                            # Update required_patches to reflect the new destination folder path
+                            # Update required_patches safely without altering active iteration anchors
                             if updated_destination_folder_path not in required_patches[patch][method_install]:
                                 required_patches[patch][method_install].update({updated_destination_folder_path: {}})
                             required_patches[patch][method_install][updated_destination_folder_path].update({install_file: required_patches[patch][method_install][install_patch_directory][install_file]})
@@ -486,9 +488,8 @@ class PatchSysVolume:
         """
         if variant == DynamicPatchset.MetallibSupportPkg:
             return self._resolve_metallib_support_pkg()
-
-        raise Exception(f"Unknown Dynamic Patchset: {variant}")
-
+        else:
+            raise Exception(f"Unknown Dynamic Patchset: {variant}")
 
     def _preflight_checks(self, required_patches: dict, source_files_path: str) -> dict:
         """
@@ -614,9 +615,15 @@ class PatchSysVolume:
         if patchset_obj.can_unpatch is False:
             logging.error("- Cannot continue with unpatching!!!")
             patchset_obj.detailed_errors()
-            return
+            sys.exit(3)
 
         if self._mount_root_vol() is False:
             logging.error("- Failed to mount root volume, cannot continue with unpatching!!!")
-            return
-        self._unpatch_root_vol()
+            sys.exit(3)
+
+        try:
+            self._unpatch_root_vol()
+        except Exception as e:
+            logging.error(f"- Critical error during unpatching sequence: {e}")
+            self._unmount_root_vol()
+            sys.exit(3)
