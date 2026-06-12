@@ -327,13 +327,15 @@ class InstallOCFrame(wx.Frame):
             if self.constants.update_stage != gui_support.AutoUpdateStages.INACTIVE:
                 self.constants.update_stage = gui_support.AutoUpdateStages.FINISHED
             
-            # Use a slightly wider, flexible size container to prevent clipping and layout engine crashes
+            # 1. Strip raw crash symbols or force a clean text error message string
+            error_msg = "OpenCore installation failed.\n\nReason: Mount or file copy routine was interrupted.\n\nWould you like to report this issue or ask Gemini for help?"
+            
+            # 2. Build the fallback dialog safely using standard widths
             error_dialog = wx.Dialog(self, title="Installation Error", size=(460, 200))
             
             main_sizer = wx.BoxSizer(wx.VERTICAL)
             button_sizer = wx.BoxSizer(wx.HORIZONTAL)
             
-            error_msg = "OpenCore installation failed.\n\nWould you like to report this issue or ask Gemini for help?"
             msg_text = wx.StaticText(error_dialog, label=error_msg)
             msg_text.SetFont(gui_support.font_factory(12, wx.FONTWEIGHT_NORMAL))
             
@@ -341,9 +343,7 @@ class InstallOCFrame(wx.Frame):
             btn_gemini = wx.Button(error_dialog, id=wx.ID_NONE, label="Ask Gemini")
             btn_close  = wx.Button(error_dialog, id=wx.ID_CANCEL, label="Close")
             
-            # Using wx.ALL flags safely ensures margins don't break structural positioning
             main_sizer.Add(msg_text, 1, wx.ALL | wx.EXPAND, 20)
-            
             button_sizer.Add(btn_report, 0, wx.RIGHT, 10)
             button_sizer.Add(btn_gemini, 0, wx.RIGHT, 10)
             button_sizer.Add(btn_close, 0)
@@ -351,14 +351,13 @@ class InstallOCFrame(wx.Frame):
             main_sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.BOTTOM | wx.RIGHT, 20)
             
             error_dialog.SetSizer(main_sizer)
-            error_dialog.Layout() # Explicitly recalculates positioning before rendering
+            error_dialog.Layout()
             error_dialog.Centre()
             
             response = error_dialog.ShowModal()
             
             if response == wx.ID_OK:
                 webbrowser.open("https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")
-            
             elif response == wx.ID_NONE:
                 gemini_window = GeminiWebView(self, title="Gemini AI Assistant")
                 gemini_window.Show()
