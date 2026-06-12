@@ -332,7 +332,7 @@ class InstallOCFrame(wx.Frame):
                 self, 
                 error_msg, 
                 "Installation Error", 
-                wx.OK | wx.CANCEL | wx.AUX1_BUTTON | wx.ICON_ERROR
+                wx.OK | wx.CANCEL | wx.ICON_ERROR
             )
             
             help_dialog.SetOKCancelLabels("Report Issue", "Close")
