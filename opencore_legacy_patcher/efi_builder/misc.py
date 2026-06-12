@@ -600,22 +600,26 @@ class BuildMiscellaneous:
                 "Limit": 0,
                 "Skip": 0
             })
+
+        # 3. Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
+        # Dieser Fix ersetzt den fehlerhaften Kernel-Patch durch sichere NVRAM-Argumente.
+        # Er verhindert, dass der Installer APFS-Partitionen blockiert.
+        
+        try:
+            logging.info("- Injecting User-Space Attestation bypass flags (Fixes Error -10000)")
+            
+            # Fügt das Flag zu den bestehenden boot-args hinzu
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-oas_skip_attestation")
+            
+            # Setzt die Installer-Variable, um die Prüfung komplett zu überspringen
+            self._set_nvram_value(APPLE_NVRAM_UUID, "IAS_ENV_SKIP_ATTESTATION", "1", overwrite=True)
+            
+        except Exception as e:
+            logging.error("Failed to inject Attestation Error -10000 bypass flags:")
+            logging.exception("Stack Trace:")
         if enable_experimental_patches==True: #soll normalerweise dieser Funktion niemals True rückgeben, ohne dass der Benutzer selbst ins Code eingreift
             # Gemini-generierten Patches, überprüfung und testen erforderlich:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
             # Seien Sie momentan mit dieser Patch vorsichtig bevor sie es aktivieren
-            # 3. Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
-            # Dieser Fix ersetzt den fehlerhaften Kernel-Patch durch sichere NVRAM-Argumente.
-            # Er verhindert, dass der Installer APFS-Partitionen blockiert.
-            try:
-                logging.info("- Injecting User-Space Attestation bypass flags (Fixes Error -10000)")
-                
-                # Fügt das Flag zu den bestehenden boot-args hinzu
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-oas_skip_attestation")
-                
-                # Setzt die Installer-Variable, um die Prüfung komplett zu überspringen
-                self._set_nvram_value(APPLE_NVRAM_UUID, "IAS_ENV_SKIP_ATTESTATION", "1", overwrite=True)
-                
-            except Exception as e:
-                logging.error("Failed to inject Attestation Error -10000 bypass flags:")
-                logging.exception("Stack Trace:")
+            logging.info("Momentan sind keine weitere optionale Patches verfügbar.")
+            logging.info("No more available optional patches at this moment.")
