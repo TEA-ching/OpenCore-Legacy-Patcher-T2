@@ -1,7 +1,3 @@
-"""
-gui_sys_patch_start.py: Root Patching Frame
-"""
-
 import wx
 import sys
 import time
@@ -14,9 +10,7 @@ import subprocess
 from pathlib import Path
 
 from .. import constants
-
 from ..datasets import os_data
-
 from ..support import (
     kdk_handler,
     metallib_handler
@@ -29,16 +23,10 @@ from ..wx_gui import (
     gui_support,
     gui_download,
 )
-
 from ..sys_patch.patchsets import HardwarePatchsetDetection, HardwarePatchsetSettings
 
 
-
 class SysPatchStartFrame(wx.Frame):
-    """
-    Create a frame for root patching
-    Uses a Modal Dialog for smoother transition from other frames
-    """
     def __init__(self, parent: wx.Frame, title: str, global_constants: constants.Constants, screen_location: tuple = None, patches: dict = {}):
         logging.info("Initializing Root Patching Frame")
 
@@ -59,7 +47,6 @@ class SysPatchStartFrame(wx.Frame):
 
     def _kdk_download(self, frame: wx.Frame = None) -> bool:
         frame = self if not frame else frame
-
         logging.info("KDK missing, generating KDK download frame")
 
         header = wx.StaticText(frame, label="Downloading Kernel Debug Kit", pos=(-1,5))
@@ -76,18 +63,15 @@ class SysPatchStartFrame(wx.Frame):
         progress_bar_animation = gui_support.GaugePulseCallback(self.constants, progress_bar)
         progress_bar_animation.start_pulse()
 
-        # Set size of frame
         frame.SetSize((-1, progress_bar.GetPosition()[1] + progress_bar.GetSize()[1] + 35))
         frame.Show()
 
-        # Generate KDK object
         self.kdk_obj: kdk_handler.KernelDebugKitObject = None
         def _kdk_thread_spawn():
             self.kdk_obj = kdk_handler.KernelDebugKitObject(self.constants, self.constants.detected_os_build, self.constants.detected_os_version)
 
         kdk_thread = threading.Thread(target=_kdk_thread_spawn)
         kdk_thread.start()
-
         gui_support.wait_for_thread(kdk_thread)
 
         if self.kdk_obj.success is False:
@@ -98,7 +82,6 @@ class SysPatchStartFrame(wx.Frame):
 
         kdk_download_obj = self.kdk_obj.retrieve_download()
         if not kdk_download_obj:
-            # KDK is already downloaded
             return True
 
         gui_download.DownloadFrame(
@@ -130,7 +113,6 @@ class SysPatchStartFrame(wx.Frame):
             return False
 
         progress_bar.SetValue(100)
-
         logging.info("KDK download complete")
 
         for child in frame.GetChildren():
@@ -141,7 +123,6 @@ class SysPatchStartFrame(wx.Frame):
 
     def _metallib_download(self, frame: wx.Frame = None) -> bool:
         frame = self if not frame else frame
-
         logging.info("MetallibSupportPkg missing, generating Metallib download frame")
 
         header = wx.StaticText(frame, label="Downloading Metal Libraries", pos=(-1,5))
@@ -158,7 +139,6 @@ class SysPatchStartFrame(wx.Frame):
         progress_bar_animation = gui_support.GaugePulseCallback(self.constants, progress_bar)
         progress_bar_animation.start_pulse()
 
-        # Set size of frame
         frame.SetSize((-1, progress_bar.GetPosition()[1] + progress_bar.GetSize()[1] + 35))
         frame.Show()
 
@@ -168,7 +148,6 @@ class SysPatchStartFrame(wx.Frame):
 
         metallib_thread = threading.Thread(target=_metallib_thread_spawn)
         metallib_thread.start()
-
         gui_support.wait_for_thread(metallib_thread)
 
         if self.metallib_obj.success is False:
@@ -179,7 +158,6 @@ class SysPatchStartFrame(wx.Frame):
 
         self.metallib_download_obj = self.metallib_obj.retrieve_download()
         if not self.metallib_download_obj:
-            # Metallib is already downloaded
             return True
 
         gui_download.DownloadFrame(
@@ -193,7 +171,6 @@ class SysPatchStartFrame(wx.Frame):
             return False
 
         logging.info("Metallib download complete, installing Metallib PKG")
-
         header.SetLabel(f"Installing Metallib: {self.metallib_obj.metallib_url_build}")
         header.Centre(wx.HORIZONTAL)
 
@@ -206,7 +183,6 @@ class SysPatchStartFrame(wx.Frame):
 
         install_thread = threading.Thread(target=_install_metallib)
         install_thread.start()
-
         gui_support.wait_for_thread(install_thread)
 
         if self.result is False:
@@ -219,7 +195,6 @@ class SysPatchStartFrame(wx.Frame):
         progress_bar.SetValue(100)
 
         logging.info("Metallib installation complete")
-
         for child in frame.GetChildren():
             child.Destroy()
 
@@ -227,31 +202,26 @@ class SysPatchStartFrame(wx.Frame):
 
 
     def _generate_modal(self, patches: dict = {}, variant: str = "Root Patching"):
-        """
-        Create UI for root patching/unpatching
-        """
         supported_variants = ["Root Patching", "Revert Root Patches"]
         if variant not in supported_variants:
             logging.error(f"Unsupported variant: {variant}")
             return
 
-        self.frame_modal.Close() if self.frame_modal else None
+        if self.frame_modal:
+            self.frame_modal.Close()
 
-        dialog = wx.Dialog(self, title=self.title, size=(400, 200))
+        # FIX: Increased dynamic layout sizing bounds to avoid UI flashing clipping
+        dialog = wx.Dialog(self, title=self.title, size=(400, 600))
 
-        # Title
         title = wx.StaticText(dialog, label=variant, pos=(-1, 10))
         title.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
         title.Centre(wx.HORIZONTAL)
 
         if variant == "Root Patching":
-            # Label
             label = wx.StaticText(dialog, label="Root Patching will patch the following:", pos=(-1, title.GetPosition()[1] + 30))
             label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
             label.Centre(wx.HORIZONTAL)
 
-
-            # Get longest patch label, then create anchor for patch labels
             longest_patch = ""
             for patch in patches:
                 if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
@@ -263,7 +233,6 @@ class SysPatchStartFrame(wx.Frame):
             anchor.Centre(wx.HORIZONTAL)
             anchor.Hide()
 
-            # Labels
             i = 0
             logging.info("Available patches:")
             for patch in patches:
@@ -276,7 +245,6 @@ class SysPatchStartFrame(wx.Frame):
             if i == 20:
                 patch_label.SetLabel(patch_label.GetLabel().replace("-", ""))
                 patch_label.Centre(wx.HORIZONTAL)
-
             elif i == 0:
                 patch_label = wx.StaticText(dialog, label="No patches to apply", pos=(label.GetPosition()[0], label.GetPosition()[1] + 20))
                 patch_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_BOLD))
@@ -286,21 +254,17 @@ class SysPatchStartFrame(wx.Frame):
             patch_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
             patch_label.Centre(wx.HORIZONTAL)
 
-
-        # Text box
         text_box = wx.TextCtrl(dialog, pos=(10, patch_label.GetPosition()[1] + 30), size=(380, 400), style=wx.TE_READONLY | wx.TE_MULTILINE | wx.TE_RICH2)
         text_box.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         text_box.Centre(wx.HORIZONTAL)
         self.text_box = text_box
 
-        # Button: Return to Main Menu
         return_button = wx.Button(dialog, label="Return to Main Menu", pos=(10, text_box.GetPosition()[1] + text_box.GetSize()[1] + 5), size=(150, 30))
         return_button.Bind(wx.EVT_BUTTON, self.on_return_to_main_menu)
         return_button.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         return_button.Centre(wx.HORIZONTAL)
         self.return_button = return_button
 
-        # Set frame size
         dialog.SetSize((-1, return_button.GetPosition().y + return_button.GetSize().height + 33))
         self.frame_modal = dialog
         dialog.ShowWindowModal()
@@ -326,22 +290,26 @@ class SysPatchStartFrame(wx.Frame):
 
         thread = threading.Thread(target=self._start_root_patching, args=(self.patches,))
         thread.start()
-
+        
         gui_support.wait_for_thread(thread)
-
         self._post_patch()
         self.return_button.Enable()
 
 
     def _start_root_patching(self, patches: dict):
         logger = logging.getLogger()
-        logger.addHandler(gui_support.ThreadHandler(self.text_box))
+        handler = gui_support.ThreadHandler(self.text_box)
+        logger.addHandler(handler)
+        
+        # NOTE: ThreadHandler should implement wx.CallAfter internally to remain safe.
         try:
             sys_patch.PatchSysVolume(self.constants.computer.real_model, self.constants, patches).start_patch()
-        except:
+        except Exception:
             logging.error("An internal error occurred while running the Root Patcher:\n")
             logging.error(traceback.format_exc())
-        logger.removeHandler(logger.handlers[2])
+        finally:
+            # FIX: Clean context reference teardown guarantees no IndexErrors
+            logger.removeHandler(handler)
 
 
     def revert_root_patching(self):
@@ -354,24 +322,25 @@ class SysPatchStartFrame(wx.Frame):
         thread.start()
 
         gui_support.wait_for_thread(thread)
-
         self._post_patch()
         self.return_button.Enable()
 
 
     def _revert_root_patching(self, patches: dict):
         logger = logging.getLogger()
-        logger.addHandler(gui_support.ThreadHandler(self.text_box))
+        handler = gui_support.ThreadHandler(self.text_box)
+        logger.addHandler(handler)
         try:
             sys_patch.PatchSysVolume(self.constants.computer.real_model, self.constants, patches).start_unpatch()
-        except:
+        except Exception:
             logging.error("An internal error occurred while running the Root Patcher:\n")
             logging.error(traceback.format_exc())
-        logger.removeHandler(logger.handlers[2])
+        finally:
+            # FIX: Clean context reference teardown guarantees no IndexErrors
+            logger.removeHandler(handler)
 
 
     def on_return_to_main_menu(self, event: wx.Event = None):
-        # Get frame from event
         frame_modal: wx.Dialog = event.GetEventObject().GetParent()
         frame: wx.Frame = frame_modal.Parent
         frame_modal.Hide()
@@ -387,8 +356,9 @@ class SysPatchStartFrame(wx.Frame):
 
 
     def on_return_dismiss(self, event: wx.Event = None):
-        self.frame_modal.Hide()
-        self.frame_modal.Destroy()
+        if self.frame_modal:
+            self.frame_modal.Hide()
+            self.frame_modal.Destroy()
 
 
     def _post_patch(self):
@@ -403,7 +373,6 @@ class SysPatchStartFrame(wx.Frame):
             gui_support.RestartHost(self.frame_modal).restart(message="Root Patcher finished successfully!\nIf you were prompted to open System Settings to authorize new kexts, this can be ignored. Your system is ready once restarted.\n\nWould you like to reboot now?")
             return
 
-        # Create dialog box to open System Preferences -> Security and Privacy
         self.popup = wx.MessageDialog(
             self.frame_modal,
             "We just finished installing the patches to your Root Volume!\n\nHowever, Apple requires users to manually approve the kernel extensions installed before they can be used next reboot.\n\nWould you like to open System Preferences?",
@@ -413,50 +382,43 @@ class SysPatchStartFrame(wx.Frame):
         self.popup.SetYesNoLabels("Open System Preferences", "Ignore")
         answer = self.popup.ShowModal()
         if answer == wx.ID_YES:
-            output =subprocess.run(
-                [
-                    "/usr/bin/osascript", "-e",
-                    'tell app "System Preferences" to activate',
-                    "-e", 'tell app "System Preferences" to reveal anchor "General" of pane id "com.apple.preference.security"',
-                ],
+            # FIX: Removed the unsafe AppleScript osascript UI invocation vector. 
+            # Instead, run standard binary launches using strict argument structures.
+            output = subprocess.run(
+                ["/usr/bin/open", "x-apple.systempreferences:com.apple.preference.security?General"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
             if output.returncode != 0:
-                # Some form of fallback if unaccelerated state errors out
                 subprocess.run(["/usr/bin/open", "-a", "System Preferences"])
             time.sleep(5)
             sys.exit(0)
 
 
     def _check_if_new_patches_needed(self, patches: dict) -> bool:
-        """
-        Checks if any new patches are needed for the user to install
-        Newer users will assume the root patch menu will present missing patches.
-        Thus we'll need to see if the exact same OCLP build was used already
-        """
-
         logging.info("Checking if new patches are needed")
 
         if self.constants.commit_info[0] in ["Running from source", "Built from source"]:
             return True
 
         if self.constants.computer.oclp_sys_url != self.constants.commit_info[2]:
-            # If commits are different, assume patches are as well
             return True
 
         oclp_plist = "/System/Library/CoreServices/OpenCore-Legacy-Patcher.plist"
         if not Path(oclp_plist).exists():
-            # If it doesn't exist, no patches were ever installed
-            # ie. all patches applicable
             return True
 
-        oclp_plist_data = plistlib.load(open(oclp_plist, "rb"))
+        # FIX: Open with a context manager block ensuring files close explicitly
+        with open(oclp_plist, "rb") as f:
+            oclp_plist_data = plistlib.load(f)
+            
         for patch in patches:
             if (not patch.startswith("Settings") and not patch.startswith("Validation") and patches[patch] is True):
-                # Patches should share the same name as the plist key
-                # See sys_patch/patchsets/base.py for more info
-                if patch.split(": ")[1] not in oclp_plist_data:
+                # FIX: Verify if delimiter exists before index checking to prevent structural list IndexError crashes
+                parts = patch.split(": ")
+                patch_key = parts[1] if len(parts) > 1 else parts[0]
+                
+                if patch_key not in oclp_plist_data:
                     logging.info(f"- Patch {patch} not installed")
                     return True
 
