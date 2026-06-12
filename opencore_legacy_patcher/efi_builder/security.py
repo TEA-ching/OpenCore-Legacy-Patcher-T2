@@ -277,12 +277,6 @@ class BuildSecurity:
         self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
         self.config["Misc"]["Security"]["ApECID"]          = int(0)
 
-        if self.model == "MacBookPro15,1":
-            logging.info("  > Forcing Native SMBIOS (MacBookPro15,1) to prevent Trust Cache mismatch")
-            for section in ["Generic", "SMBIOS", "DataHub"]:
-                if section in self.config.get("PlatformInfo", {}):
-                    self.config["PlatformInfo"][section]["SystemProductName"] = "MacBookPro15,1"
-
         self._apply_t2_amfi_boot_args(apple_nvram_uuid)
         self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 -v keepsyms=1 nvme_shutdown_timestamp=0")
 
