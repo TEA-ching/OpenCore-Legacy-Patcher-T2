@@ -343,7 +343,8 @@ class InstallOCFrame(wx.Frame):
             if response == wx.ID_OK:
                 webbrowser.open("https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")
             
-            elif response == wx.ID_AUX1:
+            #  THE FIX: Change wx.ID_AUX1 to wx.ID_NONE
+            elif response == wx.ID_NONE:
                 gemini_window = GeminiWebView(self, title="Gemini AI Assistant")
                 gemini_window.Show()
 
