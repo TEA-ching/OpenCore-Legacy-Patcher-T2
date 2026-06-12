@@ -111,11 +111,12 @@ class PatchSysVolume:
         """
         Initializes the pathing for root volume patching
         """
-        self.mount_location_data = ""
         if self.root_supports_snapshot is True:
             self.mount_location = "/System/Volumes/Update/mnt1"
+            self.mount_location_data = "/System/Volumes/Update/mnt1" # FIX: Verhindert Schreibzugriffe auf das Live-System
         else:
             self.mount_location = ""
+            self.mount_location_data = ""
 
         self.mount_extensions = f"{self.mount_location}/System/Library/Extensions"
         self.mount_application_support = f"{self.mount_location_data}/Library/Application Support"
@@ -152,15 +153,16 @@ class PatchSysVolume:
             return False
 
         try:
-            mounted_data = plistlib.load(open(mounted_system_version, "rb"))
+            with open(mounted_system_version, "rb") as f:
+                mounted_data = plistlib.load(f)
             if mounted_data["ProductBuildVersion"] != self.constants.detected_os_build:
                 logging.error(
                     f"- SystemVersion.plist build version mismatch: found {mounted_data['ProductVersion']} ({mounted_data['ProductBuildVersion']}), expected {self.constants.detected_os_version} ({self.constants.detected_os_build})"
-                    )
+                )
                 logging.error("An update is in progress on your machine and patching cannot continue until it is cancelled or finished")
                 return False
-        except:
-            logging.error("- Failed to parse SystemVersion.plist")
+        except Exception as e:
+            logging.error(f"- Failed to parse SystemVersion.plist: {e}")
             return False
 
         return True
@@ -242,7 +244,7 @@ class PatchSysVolume:
         Rebuilds the Kernel Cache
         """
 
-        result =  kernelcache.RebuildKernelCache(
+        result = kernelcache.RebuildKernelCache(
             os_version=self.constants.detected_os,
             mount_location=self.mount_location,
             auxiliary_cache=self.needs_kmutil_exemptions,
@@ -393,6 +395,10 @@ class PatchSysVolume:
                 for install_patch_directory in list(required_patches[patch][method_install]):
                     logging.info(f"- Handling Installs in: {install_patch_directory}")
                     for install_file in list(required_patches[patch][method_install][install_patch_directory]):
+                        # FIX: Schlüssel-Existenzprüfung hinzugefügt, um KeyError durch die .pop() Methode zu verhindern
+                        if install_file not in required_patches[patch][method_install][install_patch_directory]:
+                            continue
+                            
                         source_folder_path = required_patches[patch][method_install][install_patch_directory][install_file] + install_patch_directory
                         # Check whether to source from root
                         if not required_patches[patch][method_install][install_patch_directory][install_file].startswith("/"):
@@ -427,7 +433,7 @@ class PatchSysVolume:
             if PatchType.EXECUTE in required_patches[patch]:
                 for process in required_patches[patch][PatchType.EXECUTE]:
                     # Some processes need sudo, however we cannot directly call sudo in some scenarios
-                    # Instead, call elevated funtion if string's boolean is True
+                    # Instead, call elevated function if string's boolean is True
                     if required_patches[patch][PatchType.EXECUTE][process] is True:
                         logging.info(f"- Running Process as Root:\n{process}")
                         subprocess_wrapper.run_as_root_and_verify(process.split(" "), stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -484,13 +490,13 @@ class PatchSysVolume:
         raise Exception(f"Unknown Dynamic Patchset: {variant}")
 
 
-    def _preflight_checks(self, required_patches: dict, source_files_path: Path) -> dict:
+    def _preflight_checks(self, required_patches: dict, source_files_path: str) -> dict:
         """
         Runs preflight checks before patching
 
         Parameters:
             required_patches (dict): Patchset dictionary (from HardwarePatchsetDetection)
-            source_files_path (Path): Path to the source files (PatcherSupportPkg)
+            source_files_path (str): Path to the source files (PatcherSupportPkg)
 
         Returns:
             dict: Updated patchset dictionary
@@ -511,10 +517,19 @@ class PatchSysVolume:
                         except TypeError:
                             pass
 
-                        source_file = required_patches[patch][method_type][install_patch_directory][install_file] + install_patch_directory + "/" + install_file
+                        base_payload_dir = required_patches[patch][method_type][install_patch_directory][install_file]
+
+                        # --- FIX FOR DARWIN 25 / macOS 26 TAHOE PATH ESCALATION ---
+                        if self.constants.detected_os >= 25 and isinstance(base_payload_dir, str):
+                            if base_payload_dir.endswith("-25"):
+                                base_payload_dir = base_payload_dir.rsplit("-25", 1)[0]
+                                required_patches[patch][method_type][install_patch_directory][install_file] = base_payload_dir
+                        # ----------------------------------------------------------
+
+                        source_file = base_payload_dir + install_patch_directory + "/" + install_file
 
                         # Check whether to source from root
-                        if not required_patches[patch][method_type][install_patch_directory][install_file].startswith("/"):
+                        if isinstance(base_payload_dir, str) and not base_payload_dir.startswith("/"):
                             source_file = source_files_path + "/" + source_file
                         if not Path(source_file).exists():
                             raise Exception(f"Failed to find {source_file}")
@@ -574,13 +589,19 @@ class PatchSysVolume:
             logging.error("- Failed to mount root volume, cannot continue with patching!!!")
             return
 
-        if self._run_sanity_checks() is False:
+        # FIX: Try-Except-Block sichert den Unmount bei Fehlern im Preflight oder der Patch-Sequenz
+        try:
+            if self._run_sanity_checks() is False:
+                self._unmount_root_vol()
+                logging.error("- Failed sanity checks, cannot continue with patching!!!")
+                logging.error("- Please ensure that you do not have any updates pending")
+                return
+            self._patch_root_vol()
+        except Exception as e:
+            logging.error(f"- Critical error during patching sequence: {e}")
             self._unmount_root_vol()
-            logging.error("- Failed sanity checks, cannot continue with patching!!!")
-            logging.error("- Please ensure that you do not have any updates pending")
-            return
-
-        self._patch_root_vol()
+            self.constants.root_patcher_succeeded = False
+            raise e
 
 
     def start_unpatch(self) -> None:
@@ -598,5 +619,4 @@ class PatchSysVolume:
         if self._mount_root_vol() is False:
             logging.error("- Failed to mount root volume, cannot continue with unpatching!!!")
             return
-
         self._unpatch_root_vol()
