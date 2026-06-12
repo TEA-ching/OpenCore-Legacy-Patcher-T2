@@ -327,26 +327,46 @@ class InstallOCFrame(wx.Frame):
             if self.constants.update_stage != gui_support.AutoUpdateStages.INACTIVE:
                 self.constants.update_stage = gui_support.AutoUpdateStages.FINISHED
             
-            error_msg = "OpenCore installation failed.\n\nWould you like to report this issue or ask Gemini for help?"
-            help_dialog = wx.RichMessageDialog(
-                self, 
-                error_msg, 
-                "Installation Error", 
-                wx.OK | wx.CANCEL | wx.ICON_ERROR
-            )
+            # Create a custom dialog to reliably show 3 buttons on macOS
+            error_dialog = wx.Dialog(self, title="Installation Error", size=(400, 180))
             
-            help_dialog.SetOKCancelLabels("Report Issue", "Close")
-            help_dialog.SetAuxiliaryLabel("Ask Gemini")
-
-            response = help_dialog.ShowModal()
-
+            # Layout Sizers
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
+            button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            
+            # Error Message Text
+            error_msg = "OpenCore installation failed.\n\nWould you like to report this issue or ask Gemini for help?"
+            msg_text = wx.StaticText(error_dialog, label=error_msg)
+            msg_text.SetFont(gui_support.font_factory(12, wx.FONTWEIGHT_NORMAL))
+            
+            # Action Buttons
+            btn_report = wx.Button(error_dialog, id=wx.ID_OK, label="Report Issue")
+            btn_gemini = wx.Button(error_dialog, id=wx.ID_NONE, label="Ask Gemini")
+            btn_close  = wx.Button(error_dialog, id=wx.ID_CANCEL, label="Close")
+            
+            # Assemble Sizers
+            main_sizer.Add(msg_text, 1, wx.ALL | wx.EXPAND, 20)
+            
+            button_sizer.Add(btn_report, 0, wx.RIGHT, 10)
+            button_sizer.Add(btn_gemini, 0, wx.RIGHT, 10)
+            button_sizer.Add(btn_close, 0)
+            
+            main_sizer.Add(button_sizer, 0, wx.ALIGN_RIGHT | wx.BOTTOM | wx.RIGHT, 15)
+            
+            error_dialog.SetSizer(main_sizer)
+            error_dialog.Centre()
+            
+            # Capture response
+            response = error_dialog.ShowModal()
+            
             if response == wx.ID_OK:
                 webbrowser.open("https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")
             
-            #  THE FIX: Change wx.ID_AUX1 to wx.ID_NONE
             elif response == wx.ID_NONE:
                 gemini_window = GeminiWebView(self, title="Gemini AI Assistant")
                 gemini_window.Show()
+                
+            error_dialog.Destroy()
 
 
     def _install_oc(self, partition: dict) -> None:
