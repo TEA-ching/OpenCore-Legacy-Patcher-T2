@@ -289,11 +289,11 @@ class BuildSecurity:
         if self.constants.detected_os >= os_data.os_data.tahoe:
             self.is_tahoe_target = True
             self._apply_cryptex_patches(apple_nvram_uuid)
-        elif self.is_tahoe_target is False and self.constants.detected_os >= os_data.os_data.mojave and self.constants.detected_os < os_data.os_data.tahoe:
+        elif self.is_tahoe_target is False and self.constants.detected_os >= os_data.os_data.catalina and self.constants.detected_os < os_data.os_data.tahoe:
             logging.info("Popping up a popup to ask if the OS target is Tahoe or not since we couldn't identify...")
             self._unknown_target(apple_nvram_uuid)
         else:
-            logging.error("Upgrading from macOS High Sierra to Tahoe is not possible. Please, upgrade to macOS Sequoia first. We'll skip any macOS 26-only patches.")
+            logging.error("Upgrading from macOS High Sierra or Mojave straight to Tahoe is not possible. Please, upgrade to macOS Sequoia first. We'll skip any macOS 26-only patches.")
             return
 
     def _unknown_target(self, apple_nvram_uuid: str) -> None:
