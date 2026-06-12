@@ -9,6 +9,7 @@ import traceback
 import webbrowser
 import wx.html2
 import platform
+import time
 
 from .. import constants
 
@@ -327,7 +328,6 @@ class InstallOCFrame(wx.Frame):
             if self.constants.update_stage != gui_support.AutoUpdateStages.INACTIVE:
                 self.constants.update_stage = gui_support.AutoUpdateStages.FINISHED
             
-            # Wrap the entire UI rendering block to keep it away from AppleScript
             try:
                 error_dialog = wx.Dialog(self, title="Installation Error", size=(460, 200))
                 
@@ -338,8 +338,9 @@ class InstallOCFrame(wx.Frame):
                 msg_text = wx.StaticText(error_dialog, label=error_msg)
                 msg_text.SetFont(gui_support.font_factory(12, wx.FONTWEIGHT_NORMAL))
                 
+                # Use wx.ID_ANY for the Gemini button to give it a perfectly valid C++ ID
                 btn_report = wx.Button(error_dialog, id=wx.ID_OK, label="Report Issue")
-                btn_gemini = wx.Button(error_dialog, id=wx.ID_NONE, label="Ask Gemini")
+                btn_gemini = wx.Button(error_dialog, id=wx.ID_ANY, label="Ask Gemini")
                 btn_close  = wx.Button(error_dialog, id=wx.ID_CANCEL, label="Close")
                 
                 main_sizer.Add(msg_text, 1, wx.ALL | wx.EXPAND, 20)
@@ -353,23 +354,32 @@ class InstallOCFrame(wx.Frame):
                 error_dialog.Layout()
                 error_dialog.Centre()
                 
+                # Fetch the dynamically assigned auto-ID for our check below
+                gemini_id = btn_gemini.GetId()
+                
                 response = error_dialog.ShowModal()
                 
                 if response == wx.ID_OK:
                     webbrowser.open("https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")
-                elif response == wx.ID_NONE:
+                
+                # Match against the safe dynamic ID instead of wx.ID_NONE
+                elif response == gemini_id:
                     gemini_window = GeminiWebView(self, title="Gemini AI Assistant")
                     gemini_window.Show()
                     
                 error_dialog.Destroy()
 
             except Exception as ui_error:
-                # This intercepts the true UI bug and prints it clearly to your Terminal window!
+                logging.error("An invalid syntax prevented from displaying the error. The error is the following:")
+                logging.exception("Stack Trace:")
+                logging.info("Please report this issue.")
+                logging.info("To fix this bug, please check for updates and update as soon as the next release is out.")
                 print("\n" + "="*50)
                 print(f"CRITICAL UI ERROR CAUGHT: {ui_error}")
-                import traceback
                 print(traceback.format_exc())
                 print("="*50 + "\n")
+                time.sleep(90)
+                sys.exit(3)
 
     def _install_oc(self, partition: dict) -> None:
         """
