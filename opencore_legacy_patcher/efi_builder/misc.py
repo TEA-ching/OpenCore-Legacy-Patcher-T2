@@ -413,7 +413,13 @@ class BuildMiscellaneous:
         """T2 Security Chip Handler."""
         if not self._is_t2_mac():
             return
-        enable_experimental_patches=False #soll normalerweise dieser Funktion nicht True rückgeben, stattdessen wenn für experimentelle Zwecken verwenden soll, der Benutzer soll dies auf True korrigieren
+        enable_experimental_patches = False # Nur auf True setzen wenn der Benutzer manuell selbst bearbeitet und wechselt enable_experimental_patches von False auf True
+        logging.info("If you want to enable optional patches that haven't been tested yet, you should download go to releases")
+        logging.info(", then download the zip file, extract it, and then, open up misc.py.")
+        logging.info("And afterwards, you need manually to set enable_experimental_patches from False to True")
+        logging.info("Wenn Sie möchten, optionale Patches zu aktivieren, die nicht getestet wurden, Sie müssen nach Releases gehen")
+        logging.info(", denn die Zip-Datei herunterladen, und denn dies zu extrahieren. Und denn misc.py zu öffnen.")
+        logging.info("Und denn, manuell die Funktion enable_experimental_patches von False auf True setzen.")
         builder = support.BuildSupport(self.model, self.constants, self.config)
         self.config.setdefault("Kernel", {}).setdefault("Patch", [])
 
@@ -438,8 +444,9 @@ class BuildMiscellaneous:
                 if m1: m1["Enabled"] = False
                 if m2: m2["Enabled"] = False
             except Exception as e:
-                logging.info(f"- {self.model}: Great news! We tried disabling USB-Map.kext and USN-Map-Tahoe.kext but we didn't found them.")
+                logging.info(f"- {self.model}: Great news! We tried disabling USB-Map.kext and USB-Map-Tahoe.kext but we didn't find them.")
                 logging.info("You don't have to worry about this message.")
+            
             try:
                 logging.info("Enabling AppleUSBHostPort patches")
                 self.config["Kernel"]["Patch"].extend([
@@ -451,7 +458,12 @@ class BuildMiscellaneous:
                         "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC1EPS_",
                         "Find": b"",  # Dynamically resolved by OpenCore's linker parser
                         "Replace": b"\xC3",  # ret (Immediately returns, bypassing virtual JMP)
-                        "MinKernel": "24.0.0"
+                        "MinKernel": "24.0.0",
+                        "MaxKernel": "",
+                        "Mask": b"",
+                        "ReplaceMask": b"",
+                        "Limit": 0,
+                        "Skip": 0
                     },
                     {
                         "Arch": "x86_64",
@@ -461,7 +473,12 @@ class BuildMiscellaneous:
                         "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC2EPS_",
                         "Find": b"",
                         "Replace": b"\xC3",  # ret
-                        "MinKernel": "24.0.0"
+                        "MinKernel": "24.0.0",
+                        "MaxKernel": "",
+                        "Mask": b"",
+                        "ReplaceMask": b"",
+                        "Limit": 0,
+                        "Skip": 0
                     }
                 ])
             except Exception as e:
@@ -474,14 +491,12 @@ class BuildMiscellaneous:
             APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
             logging.info("- Skipping Language and Region selection (all T2 models)")
             
-            # 1. Format 'en-US:0' as a raw byte sequence terminated by a null byte or written as exact hex data
-            # In OpenCore config.plist, this must be represented as <656e2d55533a30> (en-US:0)
+            # Format 'en-US:0' as a raw byte sequence terminated by a null byte or written as exact hex data
             prev_lang_bytes = b"en-US:0"
             
             self._set_nvram_value(APPLE_NVRAM_UUID, "prev-lang:kbd", prev_lang_bytes, overwrite=True)
             
-            # 2. Force the global language/locale environment variables to anchor the region
-            # This stops the setup subsystem from falling back to default language/region
+            # Force the global language/locale environment variables to anchor the region
             self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLanguages", ["en-US"], overwrite=True)
             self._set_nvram_value(APPLE_NVRAM_UUID, "AppleLocale", "en_US", overwrite=True)
         except Exception as e:
@@ -499,9 +514,9 @@ class BuildMiscellaneous:
             logging.info("Please try again later.")
             sys.exit(3)
         
-        if self.model in["MacBookAir8,1", "MacBookAir8,2"]:
+        if self.model in ["MacBookAir8,1", "MacBookAir8,2"]:
             try:
-                logging.info("Applying patches for MacBookAir8,1 or 8,2 to fix developer mode is force enabled on this platform AMFI: finished: 1 1 using 16384 buffer headers and 10240 cluster 10 buffer headers Previous shutdown cause: 1 panics")
+                logging.info("Applying patches for MacBookAir8,1 or 8,2 to fix CPU topology / thread pooling panic layouts")
                 self.config["Kernel"]["Quirks"]["ProvideCurrentCpuInfo"] = True
             except Exception as e:
                 logging.error("Applying patches to fix this specific kernel panic failed due to the following error:")
@@ -532,91 +547,90 @@ class BuildMiscellaneous:
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
         kernel_patches = self.config['Kernel']['Patch']
 
-        # Disable xART validation capacity loop checks safely (Fixes kernel panics upon trying to boot macOS 26 Tahoe via OpenCore)
+        # 1. Corecrypto Bypass (Stabilized with dynamic symbol hook)
+        if not any(p.get("Comment") == "Bypass FIPS Kernel POST Panic (-2074)" for p in kernel_patches):
+            logging.info("  > Injecting corecrypto FIPS compliance bypass symbol hook")
+            kernel_patches.append({
+                "Arch": "x86_64",
+                "Base": "_fips_post_check",
+                "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
+                "Count": 1,
+                "Enabled": True,
+                "Identifier": "com.apple.kec.corecrypto",
+                "Limit": 0,
+                "MinKernel": "24.0.0",
+                "MaxKernel": "",
+                "Find": b"",
+                "Mask": b"",
+                "Replace": b"\x31\xC0\xC3",  # xor eax, eax ; ret
+                "ReplaceMask": b"",
+                "Skip": 0
+            })
+
+        # 2. Disable xART validation capacity loop checks safely (Targeted Identifier fix)
         if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
             logging.info("  > Injecting AppleSEPManager text segment check bypass into kernel cache")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "",  # Leave empty to scan the segment naturally
+                "Base": "_xart_server_initialise",
                 "Comment": "Bypass XARTDisableLog limits (Tahoe Cache Fix)",
                 "Count": 1,
                 "Enabled": True,
-                # Force OpenCore to scan the global prelinked kernel cache pool
-                "Identifier": "apple",
-                # Matches exactly lines f8001c4858f and f8001c48593: CMP RCX, 0x10; JA LAB_ffffff8001c485fb
-                "Find": b"\x48\x83\xF9\x10\x77\x66",
+                "Identifier": "com.apple.driver.AppleSEPManager",
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                # Replaces JA (77 66) with two NOPs (90 90) so execution safely falls through 
-                "Replace": b"\x48\x83\xF9\x10\x90\x90",
+                "Find": b"",
+                "Replace": b"\x31\xC0\xC3",  # xor eax, eax ; ret
                 "ReplaceMask": b"",
                 "Limit": 0,
                 "Skip": 0
             })
 
-        # Force AppleSEPDeviceService OOL constraints (Fixes hardware channel allocation drops)
+        # 3. Force AppleSEPDeviceService OOL constraints (Targeted Identifier + Mangled C++ Name)
         if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
             logging.info("  > Injecting AppleSEPDeviceService OOL payload bypass")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "",
+                "Base": "__ZN21AppleSEPDeviceService23get_max_ool_send_pagesEv",
                 "Comment": "Hardcode SEP OOL Max Send Pages Limit",
                 "Count": 1,
                 "Enabled": True,
-                "Identifier": "apple",
-                # Finds: MOV RAX, [RDI+0x88]; MOVZX EAX, byte ptr [RAX+0x6]; POP RBP; RET
-                "Find": b"\x48\x8b\x87\x88\x00\x00\x00\x0f\xb6\x40\x06\x5d\xc3",
+                "Identifier": "com.apple.driver.AppleSEPManager",
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                # Replaces with: MOV EAX, 0x40; NOP blocks; POP RBP; RET
-                "Replace": b"\xb8\x40\x00\x00\x00\x90\x90\x90\x90\x90\x90\x5d\xc3",
+                "Find": b"",
+                "Replace": b"\xB8\x40\x00\x00\x00\xC3",  # mov eax, 0x40 ; ret
                 "ReplaceMask": b"",
                 "Limit": 0,
                 "Skip": 0
             })
 
-        # Corrected AppleKeyStoreUserClient operational state bypass with Masking
+        # 4. Corrected AppleKeyStoreUserClient operational state bypass
         if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)" for p in kernel_patches):
-            logging.info("  > Injecting masked AppleKeyStoreUserClient branch override")
+            logging.info("  > Injecting stabilized AppleKeyStore internal branch override")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "",
+                "Base": "__ZN21AppleKeyStoreSession18check_ticket_aliveEv",
                 "Comment": "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)",
                 "Count": 1,
                 "Enabled": True,
                 "Identifier": "com.apple.driver.AppleKeyStore",
-                
-                # 1. We keep \x50\x00\x00\x00 as a placeholder in the Find sequence
-                "Find":        b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x0f\x86\x50\x00\x00\x00",
-                
-                # 2. Mask out the final 4 bytes (\x00 means ignore, \xff means match exactly)
-                "Mask":        b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x00\x00\x00",
-                
-                # 3. Replace the instruction sequence with our 6 clean NOP bytes
-                "Replace":     b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x90\x90\x90\x90\x90\x90",
-                
-                # 4. ReplaceMask mirror: tell it to overwrite everything we matched
-                "ReplaceMask": b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
-                
+                "Find": b"",
+                "Mask": b"",
+                "Replace": b"\x31\xC0\xC3",  # xor eax, eax ; ret
+                "ReplaceMask": b"",
                 "MinKernel": "24.0.0",
                 "MaxKernel": "",
                 "Limit": 0,
                 "Skip": 0
             })
             
-        # 3. Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
-        # Dieser Fix ersetzt den fehlerhaften Kernel-Patch durch sichere NVRAM-Argumente.
-        # Er verhindert, dass der Installer APFS-Partitionen blockiert.
-        
+        # Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
         try:
             logging.info("- Injecting User-Space Attestation bypass flags (Fixes Error -10000)")
-            
-            # Fügt das Flag zu den bestehenden boot-args hinzu
             self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-oas_skip_attestation")
-            
-            # Setzt die Installer-Variable, um die Prüfung komplett zu überspringen
             self._set_nvram_value(APPLE_NVRAM_UUID, "IAS_ENV_SKIP_ATTESTATION", "1", overwrite=True)
         except Exception as e:
             logging.error("Failed to inject Attestation Error -10000 bypass flags:")
