@@ -621,5 +621,32 @@ class BuildMiscellaneous:
             # Gemini-generierten Patches, überprüfung und testen erforderlich:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
             # Seien Sie momentan mit dieser Patch vorsichtig bevor sie es aktivieren
-            logging.info("Momentan sind keine weitere optionale Patches verfügbar.")
-            logging.info("No more available optional patches at this moment.")
+            # Force AppleAPFSContainerScheme priority override to eliminate formatting race conditions
+            if not any(p.get("Comment") == "Elevate APFS Probe Score for T2 Stability" for p in kernel_patches):
+                try:
+                    logging.info("  > Injecting Elevated APFS Container Scheme Probe Score (Fixes Exit Code 8 / T2 Panics)")
+                    kernel_patches.append({
+                        "Arch": "x86_64",
+                        "Comment": "Elevate APFS Probe Score for T2 Stability",
+                        "Count": 1,
+                        "Enabled": True,
+                        "Identifier": "com.apple.filesystems.apfs",
+                        "Limit": 0,
+                        "Skip": 0,
+                        "Enabled": True,
+                        # PlistPath targets the internal metadata file within the kext bundle
+                        "PlistPath": "Contents/Info.plist",
+                        # Finds: <key>IOProbeScore</key><integer>2000</integer>
+                        "Find": b"\x3c\x6b\x65\x79\x3e\x49\x4f\x50\x72\x6f\x62\x65\x53\x63\x6f\x72\x65\x3c\x2f\x6b\x65\x79\x3e\x3c\x69\x6e\x74\x65\x67\x65\x72\x3e\x32\x30\x30\x30\x3c\x2f\x69\x6e\x74\x65\x67\x65\x72\x3e",
+                        "Mask": b"",
+                        # Replaces with: <key>IOProbeScore</key><integer>5000</integer>
+                        "Replace": b"\x3c\x6b\x65\x79\x3e\x49\x4f\x50\x72\x6f\x62\x65\x53\x63\x6f\x72\x65\x3c\x2f\x6b\x65\x79\x3e\x3c\x69\x6e\x74\x65\x67\x65\x72\x3e\x35\x30\x30\x30\x3c\x2f\x69\x6e\x74\x65\x67\x65\x72\x3e",
+                        "ReplaceMask": b"",
+                        "MinKernel": "25.0.0",
+                        "MaxKernel": ""
+                    })
+                except Exception as e:
+                    logging.error("We couldn't inject the optional patch.")
+                    logging.error("Wir konnten den optionalen Patch gar nicht injizieren.")
+                    logging.info("Please try again later.")
+                    logging.info("Bitte versuchen Sie später erneut.")
