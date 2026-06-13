@@ -577,25 +577,22 @@ class BuildMiscellaneous:
                 "Skip": 0
             })
 
-        # Disable AppleKeyStoreUserClient assertion deadline loops (Fixes Disk Utility Verification Hangs)
-        if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch" for p in kernel_patches):
-            logging.info("  > Injecting AppleKeyStoreUserClient operational state bypass")
+        if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Safe Fix)" for p in kernel_patches):
+            logging.info("  > Injecting corrected AppleKeyStoreUserClient operational state branch override")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "",  # Natural segment scan
-                "Comment": "Bypass AppleKeyStore Deadline Mismatch",
+                "Base": "",
+                "Comment": "Bypass AppleKeyStore Deadline Mismatch (Safe Fix)",
                 "Count": 1,
                 "Enabled": True,
-                # Scope strictly to AppleKeyStore to prevent false positives across the cache
                 "Identifier": "com.apple.driver.AppleKeyStore",
-                # Matches: MOV R15, qword ptr [RBX + 0x100]; SUB R15, R13; JBE LAB_ffffff8001a7a14f (12 bytes)
-                "Find": b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x0f\x86",
+                # The Find sequence must encapsulate the trailing relative displacement operands completely
+                "Find": b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x0f\x86\x50\x00\x00\x00",
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "25.0.0",
-                # REMOVED: 4 trailing NOPs (\x90) so length exactly matches 'Find' (12 bytes)
-                # This safely neutralizes the first two bytes of the JBE conditional branch
-                "Replace": b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x90\x90",
+                # The Replace sequence cleanly matches the length by NOPing out the jump prefix and displacement cleanly
+                "Replace": b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x90\x90\x90\x90\x90\x90",
                 "ReplaceMask": b"",
                 "Limit": 0,
                 "Skip": 0
@@ -622,31 +619,5 @@ class BuildMiscellaneous:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
             # Seien Sie momentan mit dieser Patch vorsichtig bevor sie es aktivieren
             # Force AppleAPFSContainerScheme priority override to eliminate formatting race conditions
-            if not any(p.get("Comment") == "Elevate APFS Probe Score for T2 Stability" for p in kernel_patches):
-                try:
-                    logging.info("  > Injecting Elevated APFS Container Scheme Probe Score (Fixes Exit Code 8 / T2 Panics)")
-                    kernel_patches.append({
-                        "Arch": "x86_64",
-                        "Comment": "Elevate APFS Probe Score for T2 Stability",
-                        "Count": 1,
-                        "Enabled": True,
-                        "Identifier": "com.apple.filesystems.apfs",
-                        "Limit": 0,
-                        "Skip": 0,
-                        "Enabled": True,
-                        # PlistPath targets the internal metadata file within the kext bundle
-                        "PlistPath": "Contents/Info.plist",
-                        # Finds: <key>IOProbeScore</key><integer>2000</integer>
-                        "Find": b"\x3c\x6b\x65\x79\x3e\x49\x4f\x50\x72\x6f\x62\x65\x53\x63\x6f\x72\x65\x3c\x2f\x6b\x65\x79\x3e\x3c\x69\x6e\x74\x65\x67\x65\x72\x3e\x32\x30\x30\x30\x3c\x2f\x69\x6e\x74\x65\x67\x65\x72\x3e",
-                        "Mask": b"",
-                        # Replaces with: <key>IOProbeScore</key><integer>5000</integer>
-                        "Replace": b"\x3c\x6b\x65\x79\x3e\x49\x4f\x50\x72\x6f\x62\x65\x53\x63\x6f\x72\x65\x3c\x2f\x6b\x65\x79\x3e\x3c\x69\x6e\x74\x65\x67\x65\x72\x3e\x35\x30\x30\x30\x3c\x2f\x69\x6e\x74\x65\x67\x65\x72\x3e",
-                        "ReplaceMask": b"",
-                        "MinKernel": "25.0.0",
-                        "MaxKernel": ""
-                    })
-                except Exception as e:
-                    logging.error("We couldn't inject the optional patch.")
-                    logging.error("Wir konnten den optionalen Patch gar nicht injizieren.")
-                    logging.info("Please try again later.")
-                    logging.info("Bitte versuchen Sie später erneut.")
+            logging.info("No optional patches available at this time.")
+            logging.info("Zur dieser Zeit es gibt keine optionale Patches.")
