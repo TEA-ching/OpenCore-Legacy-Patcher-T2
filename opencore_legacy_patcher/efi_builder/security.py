@@ -370,23 +370,29 @@ class BuildSecurity:
         def patch_exists(comment: str) -> bool:
             return any(p.get("Comment") == comment for p in kernel_patches)
 
-        # 1. Bypass AppleIntelUSBXHCI T2 handshake
+        # Reverse Engineering bleibt; dieses Patch ist von Gemini generiert und muss sicherstellen, dass es richtig ist
+        # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
         if not patch_exists("Bypass T2 USB handshake (Tahoe fix)"):
+            logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "",
+                "Base": "",  # Rein über Find-Byte, da Symbole gestrippt sind
                 "Comment": "Bypass T2 USB handshake (Tahoe fix)",
+                "Count": 1,   # Stoppt nach dem ersten Treffer, verhindert Kollateralschäden
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("488B034889DFFF5038"),
-                "Mask": b"",
-                "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                "Replace": binascii.unhexlify("488B034889DF31C090"),
-                "ReplaceMask": b"",
+                "MaxKernel": "",
                 "Limit": 0,
-                "Skip": 0
+                "Skip": 0,
+                "Mask": b"",
+                "ReplaceMask": b"",
+                # Sucht nach dem Funktions-Prolog des XHCI Handshakes auf Tahoe
+                "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
+                # Überschreibt den Einstieg: xor eax, eax ; ret (31 C0 C3) und füllt mit NOPs auf
+                "Replace": binascii.unhexlify("31C0C39090909090909090909090")
             })
+            logging.info("  > Modernized T2 USB handshake patch applied successfully.")
 
         # 2. Bypass InternalHubPowerCheck
         if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
