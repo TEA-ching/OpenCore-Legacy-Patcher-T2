@@ -312,6 +312,7 @@ class BuildSecurity:
             logging.error("Upgrading from macOS High Sierra or Mojave straight to Tahoe is not possible. Please, upgrade to macOS Sequoia first.")
             logging.info("Aborting any patch injection so you can upgrade first to Sequoia or another newer macOS release.")
             webbrowser.open("https://support.apple.com/en-us/102662")
+            webbrowser.open("https://apps.apple.com/us/app/macos-sequoia/id6596773750?mt=12")
             sys.exit(3)
 
     def _unknown_target(self, apple_nvram_uuid: str) -> None:
