@@ -164,9 +164,9 @@ class BuildSecurity:
         """Apply AMFI-related boot-args based on user path validation."""
         if self._t2_uses_amfipass():
             logging.info("  > T2 target utilizes AMFIPass layer. Injecting validated Tahoe storage bypasses.")
-            # Merging -amfipassbeta with explicit user-space sandbox and registry bypass flags
+            # amfi_get_out_of_my_way=1 removed here to prevent global daemon sandbox faults (error 159).
             self._update_nvram_string(apple_nvram_uuid, "boot-args", (
-                "-amfipassbeta amfi_get_out_of_my_way=1 cs_debug=1 io=0xffffffff"
+                "-amfipassbeta cs_allow_invalid=1 cs_unrestricted_cs=1 cs_debug=1 io=0xffffffff"
             ))
             return
 
@@ -376,7 +376,6 @@ class BuildSecurity:
     
     def _apply_cryptex_patches(self, apple_nvram_uuid: str) -> None:
         if self.is_tahoe_target is True:
-            # Removed cryptex=0 and cs_allow_invalid=1 to stop user-space security lockdowns
             logging.info("Injecting unified Tahoe capability token mapping.")
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 cs_unrestricted_cs=1 cs_allow_invalid=1")
 
@@ -387,7 +386,6 @@ class BuildSecurity:
             
         # ── CRITICAL SECURITY GATE ────────────────────────────────────
         # Stop execution here if target isn't verified as macOS 26 Tahoe.
-        # Prevents kernel patching older OS installations.
         if not self.is_tahoe_target:
             logging.info("- Skipping Tahoe Kernel patches (Target OS verified as older version)")
             return
@@ -492,68 +490,82 @@ class BuildSecurity:
             self.config["Misc"]["Security"]["ApECID"]          = 0
             self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
 
-            logging.info("  > Final T2 verification complete. Execution boundaries isolated.")
-            return  # Clean break: T2 completely bypasses Branch B and Shared evaluations
+            logging.info("  > Final T2 verification complete. ")
 
         # ==============================================================
-        # Branch B: Non-T2 Mac with SIP lowered
+        # Branch B: Non-T2 Mac Configuration (PROTECTED VIA ELSE)
         # ==============================================================
-        if self.constants.sip_status is False or self.constants.custom_sip_value:
-            logging.info("- Non-T2 Mac: SIP lowered — applying SIP-related settings")
-            
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
+        else:
+            logging.info("- Non-T2 Mac detected — isolating legacy environment execution chain")
+            if self.constants.sip_status is False or self.constants.custom_sip_value:
+                logging.info("- Non-T2 Mac: SIP lowered — applying SIP-related settings")
+                
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
 
-            if self.constants.wxpython_variant is True:
+                if self.constants.wxpython_variant is True:
+                    support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                        "AutoPkgInstaller.kext", self.constants.autopkg_version, self.constants.autopkg_path
+                    )
+
+                if self.constants.custom_sip_value:
+                    logging.info(f"- Setting SIP value to: {self.constants.custom_sip_value}")
+                    sip_hex = utilities.string_to_hex(self.constants.custom_sip_value.lstrip("0x"))
+                    self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", sip_hex, overwrite=True)
+                elif self.constants.sip_status is False:
+                    logging.info("- Set SIP to allow Root Volume patching")
+                    self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
+
+                logging.info("- Allowing FileVault on Root Patched systems")
+                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                    self.config["Kernel"]["Patch"], "Comment", "Force FileVault on Broken Seal"
+                )["Enabled"] = True
+                self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_fv")
+
+                logging.info("- Enabling KC UUID mismatch patch")
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-nokcmismatchpanic")
                 support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                    "AutoPkgInstaller.kext", self.constants.autopkg_version, self.constants.autopkg_path
+                    "RSRHelper.kext", self.constants.rsrhelper_version, self.constants.rsrhelper_path
                 )
 
-            if self.constants.custom_sip_value:
-                logging.info(f"- Setting SIP value to: {self.constants.custom_sip_value}")
-                sip_hex = utilities.string_to_hex(self.constants.custom_sip_value.lstrip("0x"))
-                self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", sip_hex, overwrite=True)
-            elif self.constants.sip_status is False:
-                logging.info("- Set SIP to allow Root Volume patching")
-                self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
+            # Shared: AMFI / Library Validation (Legacy Non-T2 verification targets)
+            if self.constants.disable_cs_lv is True:
+                if self.constants.disable_amfi is True:
+                    logging.info("- Disabling AMFI (non-T2 Mac)")
+                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80")
+                else:
+                    logging.info("- Disabling Library Validation")
+                    support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                        self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement"
+                    )["Enabled"] = True
+                    support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                        self.config["Kernel"]["Patch"], "Comment", "Disable _csr_check() in _vnode_check_signature"
+                    )["Enabled"] = True
+                    self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_amfi")
+                    support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                        "CSLVFixup.kext", self.constants.cslvfixup_version, self.constants.cslvfixup_path
+                    )
 
-            logging.info("- Allowing FileVault on Root Patched systems")
-            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
-                self.config["Kernel"]["Patch"], "Comment", "Force FileVault on Broken Seal"
-            )["Enabled"] = True
-            self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_fv")
-
-            logging.info("- Enabling KC UUID mismatch patch")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-nokcmismatchpanic")
-            support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                "RSRHelper.kext", self.constants.rsrhelper_version, self.constants.rsrhelper_path
-            )
+            if self.constants.secure_status is False:
+                logging.info("- Disabling SecureBootModel (non-T2)")
+                self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
 
         # ==============================================================
-        # Shared: AMFI / Library Validation (Legacy Non-T2 verification targets)
+        # GLOBAL EVALUATION: Universal AMFIPass Injection Engine
         # ==============================================================
-        if self.constants.disable_cs_lv is True:
-            if self.constants.disable_amfi is True:
-                logging.info("- Disabling AMFI (non-T2 Mac)")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80")
-            else:
-                logging.info("- Disabling Library Validation")
-                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
-                    self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement"
-                )["Enabled"] = True
-                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
-                    self.config["Kernel"]["Patch"], "Comment", "Disable _csr_check() in _vnode_check_signature"
-                )["Enabled"] = True
-                self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_amfi")
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                    "CSLVFixup.kext", self.constants.cslvfixup_version, self.constants.cslvfixup_path
-                )
+        # Safely decoupled from structural branches to process all hardware layouts universally.
+        needs_amfipass = False
 
-        if self.constants.secure_status is False:
-            logging.info("- Disabling SecureBootModel (non-T2)")
-            self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
+        if self._is_t2_mac():
+            # If a T2 Mac targets Tahoe OR its native limit is surpassed (Sequoia)
+            if self.is_tahoe_target or smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < self.constants.detected_os:
+                needs_amfipass = True
+        else:
+            # Traditional check for older non-T2 configurations
+            if smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < os_data.os_data.sonoma:
+                needs_amfipass = True
 
-        if smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < os_data.os_data.sonoma:
-            logging.info("- Enabling AMFIPass")
+        if needs_amfipass:
+            logging.info("- Enabling AMFIPass Framework Kext injection context natively.")
             support.BuildSupport(self.model, self.constants, self.config).enable_kext(
                 "AMFIPass.kext", self.constants.amfipass_version, self.constants.amfipass_path
             )
