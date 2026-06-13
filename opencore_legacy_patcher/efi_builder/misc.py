@@ -577,27 +577,35 @@ class BuildMiscellaneous:
                 "Skip": 0
             })
 
-        if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Safe Fix)" for p in kernel_patches):
-            logging.info("  > Injecting corrected AppleKeyStoreUserClient operational state branch override")
+        # Corrected AppleKeyStoreUserClient operational state bypass with Masking
+        if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)" for p in kernel_patches):
+            logging.info("  > Injecting masked AppleKeyStoreUserClient branch override")
             kernel_patches.append({
                 "Arch": "x86_64",
                 "Base": "",
-                "Comment": "Bypass AppleKeyStore Deadline Mismatch (Safe Fix)",
+                "Comment": "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)",
                 "Count": 1,
                 "Enabled": True,
                 "Identifier": "com.apple.driver.AppleKeyStore",
-                # The Find sequence must encapsulate the trailing relative displacement operands completely
-                "Find": b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x0f\x86\x50\x00\x00\x00",
-                "Mask": b"",
-                "MaxKernel": "",
+                
+                # 1. We keep \x50\x00\x00\x00 as a placeholder in the Find sequence
+                "Find":        b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x0f\x86\x50\x00\x00\x00",
+                
+                # 2. Mask out the final 4 bytes (\x00 means ignore, \xff means match exactly)
+                "Mask":        b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x00\x00\x00",
+                
+                # 3. Replace the instruction sequence with our 6 clean NOP bytes
+                "Replace":     b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x90\x90\x90\x90\x90\x90",
+                
+                # 4. ReplaceMask mirror: tell it to overwrite everything we matched
+                "ReplaceMask": b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
+                
                 "MinKernel": "25.0.0",
-                # The Replace sequence cleanly matches the length by NOPing out the jump prefix and displacement cleanly
-                "Replace": b"\x4c\x8b\xbb\x00\x01\x00\x00\x4d\x29\xef\x90\x90\x90\x90\x90\x90",
-                "ReplaceMask": b"",
+                "MaxKernel": "",
                 "Limit": 0,
                 "Skip": 0
             })
-
+            
         # 3. Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
         # Dieser Fix ersetzt den fehlerhaften Kernel-Patch durch sichere NVRAM-Argumente.
         # Er verhindert, dass der Installer APFS-Partitionen blockiert.
@@ -613,6 +621,8 @@ class BuildMiscellaneous:
         except Exception as e:
             logging.error("Failed to inject Attestation Error -10000 bypass flags:")
             logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            sys.exit(3)
 
         if enable_experimental_patches==True: #soll normalerweise dieser Funktion niemals True rückgeben, ohne dass der Benutzer selbst ins Code eingreift
             # Gemini-generierten Patches, überprüfung und testen erforderlich:
