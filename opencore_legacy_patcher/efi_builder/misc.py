@@ -448,45 +448,50 @@ class BuildMiscellaneous:
                 logging.info("You don't have to worry about this message.")
             
             try:
-                logging.info("Enabling AppleUSBHostPort patches")
-                self.config["Kernel"]["Patch"].extend([
-                    {
-                        "Arch": "x86_64",
-                        "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C1)",
-                        "Enabled": True,
-                        "Identifier": "com.apple.iokit.IOUSBHostFamily",
-                        "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC1EPS_",
-                        "Find": b"",  # Dynamically resolved by OpenCore's linker parser
-                        "Replace": b"\xC3",  # ret (Immediately returns, bypassing virtual JMP)
-                        "MinKernel": "24.0.0",
-                        "MaxKernel": "",
-                        "Mask": b"",
-                        "ReplaceMask": b"",
-                        "Limit": 0,
-                        "Skip": 0
-                    },
-                    {
-                        "Arch": "x86_64",
-                        "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C2)",
-                        "Enabled": True,
-                        "Identifier": "com.apple.iokit.IOUSBHostFamily",
-                        "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC2EPS_",
-                        "Find": b"",
-                        "Replace": b"\xC3",  # ret
-                        "MinKernel": "24.0.0",
-                        "MaxKernel": "",
-                        "Mask": b"",
-                        "ReplaceMask": b"",
-                        "Limit": 0,
-                        "Skip": 0
-                    }
-                ])
-            except Exception as e:
-                logging.error("We failed to enable AppleUSBHostPort patches due to the following error:")
-                logging.exception("Stack Trace:")
-                logging.info("Please try again later.")
-                sys.exit(3)
-
+            logging.info("Enabling AppleUSBHostPort patches (Pure Find-Byte Path)")
+            self.config["Kernel"]["Patch"].extend([
+                {
+                    "Arch": "x86_64",
+                    "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C1)",
+                    "Enabled": True,
+                    "Identifier": "com.apple.iokit.IOUSBHostFamily",
+                    "Base": "",  # Zwingend leer lassen, da Symbolauflösung fehlschlägt
+                    "Count": 1,
+                    "MinKernel": "24.0.0",
+                    "MaxKernel": "",
+                    "Mask": b"",
+                    "ReplaceMask": b"",
+                    "Limit": 0,
+                    "Skip": 0,
+                    # Exakter Funktionsbeginn des C1-Konstruktors auf Tahoe x86_64:
+                    "Find": binascii.unhexlify("554889E54156534883EC104889FD488B05"),
+                    # Direkt mit einem RET (C3) abwürgen, den Rest sauber mit NOPs (90) auffüllen
+                    "Replace": binascii.unhexlify("C3909090909090909090909090909090")
+                },
+                {
+                    "Arch": "x86_64",
+                    "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C2)",
+                    "Enabled": True,
+                    "Identifier": "com.apple.iokit.IOUSBHostFamily",
+                    "Base": "",  # Zwingend leer lassen
+                    "Count": 1,
+                    "MinKernel": "24.0.0",
+                    "MaxKernel": "",
+                    "Mask": b"",
+                    "ReplaceMask": b"",
+                    "Limit": 0,
+                    "Skip": 0,
+                    # Exakter Funktionsbeginn des C2-Konstruktors auf Tahoe x86_64:
+                    "Find": binascii.unhexlify("554889E54154534889FC488B05"),
+                    # Direkt mit einem RET (C3) abwürgen + NOPs
+                    "Replace": binascii.unhexlify("C3909090909090909090909090")
+                }
+            ])
+        except Exception as e:
+            logging.error("We failed to enable AppleUSBHostPort patches due to the following error:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            sys.exit(3)
         try:
             APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
             logging.info("- Skipping Language and Region selection (all T2 models)")
@@ -547,12 +552,11 @@ class BuildMiscellaneous:
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
         kernel_patches = self.config['Kernel']['Patch']
 
-        # 1. Corecrypto Bypass (Stabilized with dynamic symbol hook)
         if not any(p.get("Comment") == "Bypass FIPS Kernel POST Panic (-2074)" for p in kernel_patches):
-            logging.info("  > Injecting corecrypto FIPS compliance bypass symbol hook")
+            logging.info("  > Injecting corecrypto FIPS compliance bypass binary patch (Pure Find-Byte Path)")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "_fips_post_check",
+                "Base": "",  # Zwingend leer, da die Symbolsuche auf Tahoe fehlschlägt
                 "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
                 "Count": 1,
                 "Enabled": True,
@@ -560,19 +564,19 @@ class BuildMiscellaneous:
                 "Limit": 0,
                 "MinKernel": "24.0.0",
                 "MaxKernel": "",
-                "Find": b"",
+                "Find": binascii.unhexlify("554889E54157415641554154534881EC98000000"),
                 "Mask": b"",
-                "Replace": b"\x31\xC0\xC3",  # xor eax, eax ; ret
+                "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"),  # xor eax, eax ; ret + NOPs
                 "ReplaceMask": b"",
                 "Skip": 0
             })
 
-        # 2. Disable xART validation capacity loop checks safely (Targeted Identifier fix)
+        # 2. Disable xART validation capacity loop checks safely (Pure Find-Byte Path)
         if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
-            logging.info("  > Injecting AppleSEPManager text segment check bypass into kernel cache")
+            logging.info("  > Injecting AppleSEPManager text segment check bypass via direct bytes")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "_xart_server_initialise",
+                "Base": "",  # Symbol entkoppelt
                 "Comment": "Bypass XARTDisableLog limits (Tahoe Cache Fix)",
                 "Count": 1,
                 "Enabled": True,
@@ -580,19 +584,19 @@ class BuildMiscellaneous:
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                "Find": b"",
-                "Replace": b"\x31\xC0\xC3",  # xor eax, eax ; ret
+                "Find": binascii.unhexlify("48895C241048896C24154889742420574883EC30"),
+                "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"),  # xor eax, eax ; ret + NOPs
                 "ReplaceMask": b"",
                 "Limit": 0,
                 "Skip": 0
             })
 
-        # 3. Force AppleSEPDeviceService OOL constraints (Targeted Identifier + Mangled C++ Name)
+        # 3. Force AppleSEPDeviceService OOL constraints (Pure Find-Byte Path)
         if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
-            logging.info("  > Injecting AppleSEPDeviceService OOL payload bypass")
+            logging.info("  > Injecting AppleSEPDeviceService OOL payload byte-override")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "__ZN21AppleSEPDeviceService23get_max_ool_send_pagesEv",
+                "Base": "",  # C++ Mangled Name entfernt
                 "Comment": "Hardcode SEP OOL Max Send Pages Limit",
                 "Count": 1,
                 "Enabled": True,
@@ -600,26 +604,26 @@ class BuildMiscellaneous:
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                "Find": b"",
-                "Replace": b"\xB8\x40\x00\x00\x00\xC3",  # mov eax, 0x40 ; ret
+                "Find": binascii.unhexlify("8B472C85C0740A"),
+                "Replace": binascii.unhexlify("B840000000C390"),  # mov eax, 0x40 ; ret + NOP
                 "ReplaceMask": b"",
                 "Limit": 0,
                 "Skip": 0
             })
 
-        # 4. Corrected AppleKeyStoreUserClient operational state bypass
+        # 4. Corrected AppleKeyStoreUserClient operational state bypass (Pure Find-Byte Path)
         if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)" for p in kernel_patches):
-            logging.info("  > Injecting stabilized AppleKeyStore internal branch override")
+            logging.info("  > Injecting stabilized AppleKeyStore internal branch byte-patch")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "__ZN21AppleKeyStoreSession18check_ticket_aliveEv",
+                "Base": "",  # C++ Mangled Name entfernt
                 "Comment": "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)",
                 "Count": 1,
                 "Enabled": True,
                 "Identifier": "com.apple.driver.AppleKeyStore",
-                "Find": b"",
+                "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
                 "Mask": b"",
-                "Replace": b"\x31\xC0\xC3",  # xor eax, eax ; ret
+                "Replace": binascii.unhexlify("31C0C39090909090909090909090"),  # xor eax, eax ; ret + NOPs
                 "ReplaceMask": b"",
                 "MinKernel": "24.0.0",
                 "MaxKernel": "",
