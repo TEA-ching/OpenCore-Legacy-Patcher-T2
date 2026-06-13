@@ -7,6 +7,7 @@ import binascii
 import sys
 import wx
 import threading
+import webbrowser
 
 from . import support
 from .. import constants
@@ -308,8 +309,10 @@ class BuildSecurity:
             logging.info("Popping up a popup to ask if the OS target is Tahoe or not since we couldn't identify...")
             self._unknown_target(apple_nvram_uuid)
         else:
-            logging.error("Upgrading from macOS High Sierra or Mojave straight to Tahoe is not possible. Please, upgrade to macOS Sequoia first. We'll skip any macOS 26-only patches.")
-            return
+            logging.error("Upgrading from macOS High Sierra or Mojave straight to Tahoe is not possible. Please, upgrade to macOS Sequoia first.")
+            logging.info("Aborting any patch injection so you can upgrade first to Sequoia or another newer macOS release.")
+            webbrowser.open("https://support.apple.com/en-us/102662")
+            sys.exit(3)
 
     def _unknown_target(self, apple_nvram_uuid: str) -> None:
         """
