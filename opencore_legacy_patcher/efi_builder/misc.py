@@ -451,7 +451,7 @@ class BuildMiscellaneous:
                         "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC1EPS_",
                         "Find": b"",  # Dynamically resolved by OpenCore's linker parser
                         "Replace": b"\xC3",  # ret (Immediately returns, bypassing virtual JMP)
-                        "MinKernel": "25.0.0"
+                        "MinKernel": "24.0.0"
                     },
                     {
                         "Arch": "x86_64",
@@ -461,7 +461,7 @@ class BuildMiscellaneous:
                         "Base": "__ZN16AppleUSBHostPort26IOUSBPortPowerFloorSessionC2EPS_",
                         "Find": b"",
                         "Replace": b"\xC3",  # ret
-                        "MinKernel": "25.0.0"
+                        "MinKernel": "24.0.0"
                     }
                 ])
             except Exception as e:
@@ -547,7 +547,7 @@ class BuildMiscellaneous:
                 "Find": b"\x48\x83\xF9\x10\x77\x66",
                 "Mask": b"",
                 "MaxKernel": "",
-                "MinKernel": "25.0.0",
+                "MinKernel": "24.0.0",
                 # Replaces JA (77 66) with two NOPs (90 90) so execution safely falls through 
                 "Replace": b"\x48\x83\xF9\x10\x90\x90",
                 "ReplaceMask": b"",
@@ -569,7 +569,7 @@ class BuildMiscellaneous:
                 "Find": b"\x48\x8b\x87\x88\x00\x00\x00\x0f\xb6\x40\x06\x5d\xc3",
                 "Mask": b"",
                 "MaxKernel": "",
-                "MinKernel": "25.0.0",
+                "MinKernel": "24.0.0",
                 # Replaces with: MOV EAX, 0x40; NOP blocks; POP RBP; RET
                 "Replace": b"\xb8\x40\x00\x00\x00\x90\x90\x90\x90\x90\x90\x5d\xc3",
                 "ReplaceMask": b"",
@@ -600,7 +600,7 @@ class BuildMiscellaneous:
                 # 4. ReplaceMask mirror: tell it to overwrite everything we matched
                 "ReplaceMask": b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
                 
-                "MinKernel": "25.0.0",
+                "MinKernel": "24.0.0",
                 "MaxKernel": "",
                 "Limit": 0,
                 "Skip": 0
