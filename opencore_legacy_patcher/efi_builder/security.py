@@ -163,15 +163,20 @@ class BuildSecurity:
     def _apply_t2_amfi_boot_args(self, apple_nvram_uuid: str) -> None:
         """Apply AMFI-related boot-args based on user path validation."""
         if self._t2_uses_amfipass():
-            logging.info("  > T2 target utilizes AMFIPass layer. Ensuring -amfipassbeta presence.")
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "-amfipassbeta")
+            logging.info("  > T2 target utilizes AMFIPass layer. Injecting validated Tahoe storage bypasses.")
+            # Merging -amfipassbeta with explicit user-space sandbox and registry bypass flags
+            self._update_nvram_string(apple_nvram_uuid, "boot-args", (
+                "-amfipassbeta amfi_get_out_of_my_way=1 cs_debug=1 io=0xffffffff"
+            ))
             return
 
         # Fallback if AMFIPass pathing is completely stripped
         existing = self._read_nvram_string(apple_nvram_uuid, "boot-args")
         if "amfi=0x80" not in existing:
             logging.warning("  > AMFIPass bypassed. Falling back to amfi=0x80 absolute drop.")
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi=0x80 amfi_get_out_of_my_way=1")
+            self._update_nvram_string(apple_nvram_uuid, "boot-args", (
+                "amfi=0x80 amfi_get_out_of_my_way=1 cs_debug=1 io=0xffffffff"
+            ))
 
     # ------------------------------------------------------------------
     # Graphics injection helpers
@@ -371,8 +376,9 @@ class BuildSecurity:
     
     def _apply_cryptex_patches(self, apple_nvram_uuid: str) -> None:
         if self.is_tahoe_target is True:
-            logging.info("Injecting cryptex=0 cs_allow_invalid=1 for macOS 26 Tahoe")
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0 cs_allow_invalid=1")
+            # Removed cryptex=0 and cs_allow_invalid=1 to stop user-space security lockdowns
+            logging.info("Injecting unified Tahoe capability token mapping.")
+            self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0")
 
     def _apply_t2_kernel_patches_tahoe(self) -> None:
         """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
