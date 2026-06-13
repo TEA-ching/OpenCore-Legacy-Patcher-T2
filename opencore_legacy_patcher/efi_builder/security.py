@@ -436,7 +436,7 @@ class BuildSecurity:
         if self.model in _T2_TOUCH_BAR_MODELS:
             logging.info("No touch bar patches available for now. Don't worry - your system should boot anyways.")
     
-        """Injects corecrypto binary shims to bypass FIPS Kernel POST verification failures."""
+        # Inject corecrypto binary shims to bypass FIPS Kernel POST verification failures
         logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets")
     
         corecrypto_patch = {
