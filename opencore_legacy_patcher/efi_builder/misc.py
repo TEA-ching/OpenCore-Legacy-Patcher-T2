@@ -447,46 +447,46 @@ class BuildMiscellaneous:
                 logging.info(f"- {self.model}: Great news! We tried disabling USB-Map.kext and USB-Map-Tahoe.kext but we didn't find them.")
                 logging.info("You don't have to worry about this message.")
             
-            try:
-                logging.info("Enabling AppleUSBHostPort patches (Pure Find-Byte Path)")
-                self.config["Kernel"]["Patch"].extend([
-                    {
-                        "Arch": "x86_64",
-                        "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C1)",
-                        "Enabled": True,
-                        "Identifier": "com.apple.iokit.IOUSBHostFamily",
-                        "Base": "",  # Zwingend leer lassen, da Symbolauflösung fehlschlägt
-                        "Count": 1,
-                        "MinKernel": "24.0.0",
-                        "MaxKernel": "",
-                        "Mask": b"",
-                        "ReplaceMask": b"",
-                        "Limit": 0,
-                        "Skip": 0,
-                        # Exakter Funktionsbeginn des C1-Konstruktors auf Tahoe x86_64:
-                        "Find": binascii.unhexlify("554889E54156534883EC104889FD488B05"),
-                        # Direkt mit einem RET (C3) abwürgen, den Rest sauber mit NOPs (90) auffüllen
-                        "Replace": binascii.unhexlify("C3909090909090909090909090909090")
-                    },
-                    {
-                        "Arch": "x86_64",
-                        "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C2)",
-                        "Enabled": True,
-                        "Identifier": "com.apple.iokit.IOUSBHostFamily",
-                        "Base": "",  # Zwingend leer lassen
-                        "Count": 1,
-                        "MinKernel": "24.0.0",
-                        "MaxKernel": "",
-                        "Mask": b"",
-                        "ReplaceMask": b"",
-                        "Limit": 0,
-                        "Skip": 0,
-                        # Exakter Funktionsbeginn des C2-Konstruktors auf Tahoe x86_64:
-                        "Find": binascii.unhexlify("554889E54154534889FC488B05"),
-                        # Direkt mit einem RET (C3) abwürgen + NOPs
-                        "Replace": binascii.unhexlify("C3909090909090909090909090")
-                    }
-                ])
+        try:
+            logging.info("Enabling AppleUSBHostPort patches (Pure Find-Byte Path)")
+            self.config["Kernel"]["Patch"].extend([
+                {
+                    "Arch": "x86_64",
+                    "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C1)",
+                    "Enabled": True,
+                    "Identifier": "com.apple.iokit.IOUSBHostFamily",
+                    "Base": "",  # Zwingend leer lassen, da Symbolauflösung fehlschlägt
+                    "Count": 1,
+                    "MinKernel": "24.0.0",
+                    "MaxKernel": "",
+                    "Mask": b"",
+                    "ReplaceMask": b"",
+                    "Limit": 0,
+                    "Skip": 0,
+                    # Exakter Funktionsbeginn des C1-Konstruktors auf Tahoe x86_64:
+                    "Find": binascii.unhexlify("554889E54156534883EC104889FD488B05"),
+                    # Direkt mit einem RET (C3) abwürgen, den Rest sauber mit NOPs (90) auffüllen
+                    "Replace": binascii.unhexlify("C3909090909090909090909090909090")
+                },
+                {
+                    "Arch": "x86_64",
+                    "Comment": "Bypass AppleUSBHostPort PowerFloorSession initialization (C2)",
+                    "Enabled": True,
+                    "Identifier": "com.apple.iokit.IOUSBHostFamily",
+                    "Base": "",  # Zwingend leer lassen
+                    "Count": 1,
+                    "MinKernel": "24.0.0",
+                    "MaxKernel": "",
+                    "Mask": b"",
+                    "ReplaceMask": b"",
+                    "Limit": 0,
+                    "Skip": 0,
+                    # Exakter Funktionsbeginn des C2-Konstruktors auf Tahoe x86_64:
+                    "Find": binascii.unhexlify("554889E54154534889FC488B05"),
+                    # Direkt mit einem RET (C3) abwürgen + NOPs
+                    "Replace": binascii.unhexlify("C3909090909090909090909090")
+                }
+            ])
         except Exception as e:
             logging.error("We failed to enable AppleUSBHostPort patches due to the following error:")
             logging.exception("Stack Trace:")
