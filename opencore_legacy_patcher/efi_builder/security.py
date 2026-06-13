@@ -378,7 +378,7 @@ class BuildSecurity:
         if self.is_tahoe_target is True:
             # Removed cryptex=0 and cs_allow_invalid=1 to stop user-space security lockdowns
             logging.info("Injecting unified Tahoe capability token mapping.")
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 amfi_get_out_of_my_way=1 cs_unrestricted_cs=1 cs_allow_invalid=1")
+            self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 cs_unrestricted_cs=1 cs_allow_invalid=1")
 
     def _apply_t2_kernel_patches_tahoe(self) -> None:
         """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
