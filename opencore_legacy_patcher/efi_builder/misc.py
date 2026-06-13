@@ -613,10 +613,10 @@ class BuildMiscellaneous:
             
             # Setzt die Installer-Variable, um die Prüfung komplett zu überspringen
             self._set_nvram_value(APPLE_NVRAM_UUID, "IAS_ENV_SKIP_ATTESTATION", "1", overwrite=True)
-            
         except Exception as e:
             logging.error("Failed to inject Attestation Error -10000 bypass flags:")
             logging.exception("Stack Trace:")
+
         if enable_experimental_patches==True: #soll normalerweise dieser Funktion niemals True rückgeben, ohne dass der Benutzer selbst ins Code eingreift
             # Gemini-generierten Patches, überprüfung und testen erforderlich:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
