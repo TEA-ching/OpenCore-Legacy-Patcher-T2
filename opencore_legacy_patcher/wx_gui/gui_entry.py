@@ -4,14 +4,11 @@ gui_entry.py: Entry point for the wxPython GUI
 
 import wx
 import sys
-import atexit
 import logging
 
 from Cocoa import NSApp, NSApplication
 
-
 from .. import constants
-
 from ..sys_patch.patchsets import HardwarePatchsetDetection
 
 from ..wx_gui import (
@@ -40,6 +37,7 @@ class EntryPoint:
 
     def __init__(self, global_constants: constants.Constants) -> None:
         self.app: wx.App = None
+        self.frame: wx.Frame = None
         self.main_menu_frame: gui_main_menu.MainFrame = None
         self.constants: constants.Constants = global_constants
 
@@ -62,7 +60,11 @@ class EntryPoint:
         """
         self._generate_base_data()
 
-        if "--gui_patch" in sys.argv or "--gui_unpatch" in sys.argv or start_patching is True :
+        # BEHOBEN: "patches" initialisieren, um UnboundLocalError/NameError im else-Zweig zu verhindern
+        patches = None
+        is_patching_mode = "--gui_patch" in sys.argv or "--gui_unpatch" in sys.argv or start_patching is True
+
+        if is_patching_mode:
             entry = gui_sys_patch_start.SysPatchStartFrame
             patches = HardwarePatchsetDetection(constants=self.constants).device_properties
 
@@ -71,15 +73,17 @@ class EntryPoint:
         # Normally set by main.py, but transitions from CLI mode may not have this set
         self.constants.gui_mode = True
 
-        self.frame: wx.Frame = entry(
+        self.frame = entry(
             None,
             title=f"{self.constants.patcher_name} {self.constants.patcher_version}{' (Nightly)' if not self.constants.commit_info[0].startswith('refs/tags') else ''}",
             global_constants=self.constants,
             screen_location=None,
-            **({"patches": patches} if "--gui_patch" in sys.argv or "--gui_unpatch" in sys.argv or start_patching is True else {})
+            **({"patches": patches} if is_patching_mode else {})
         )
 
-        atexit.register(self.OnCloseFrame)
+        # BEHOBEN: Gefährliches atexit.register entfernt. 
+        # Stattdessen nutzen wir das native wxPython Event-Handling für das Schließen des Fensters.
+        self.frame.Bind(wx.EVT_CLOSE, self.OnCloseFrame)
 
         if "--gui_patch" in sys.argv or start_patching is True:
             self.frame.start_root_patching()
@@ -91,10 +95,11 @@ class EntryPoint:
 
     def OnCloseFrame(self, event: wx.Event = None) -> None:
         """
-        Closes the wxPython GUI
+        Closes the wxPython GUI safely using wxWidgets native event lifecycle
         """
-
         if not self.frame:
+            if event:
+                event.Skip()
             return
 
         logging.info("Cleaning up wxPython GUI")
@@ -104,4 +109,11 @@ class EntryPoint:
 
         self.frame.DestroyChildren()
         self.frame.Destroy()
-        self.app.ExitMainLoop()
+        
+        # Sicherstellen, dass die MainLoop sauber beendet wird
+        if self.app:
+            self.app.ExitMainLoop()
+            
+        # Erlaubt dem System, das Event final zu verarbeiten, falls vorhanden
+        if event:
+            event.Skip()
