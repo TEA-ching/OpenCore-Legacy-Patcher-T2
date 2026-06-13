@@ -411,7 +411,7 @@ class BuildSecurity:
                 "Find": binascii.unhexlify("488B034889DFFF5038"),
                 "Mask": b"",
                 "MaxKernel": "",
-                "MinKernel": "25.0.0",
+                "MinKernel": "24.0.0",
                 "Replace": binascii.unhexlify("488B034889DF31C090"),
                 "ReplaceMask": b"",
                 "Skip": 0
@@ -427,7 +427,7 @@ class BuildSecurity:
                 "Find": binascii.unhexlify("554889E5488B8758010000"),
                 "Mask": b"",
                 "MaxKernel": "",
-                "MinKernel": "25.0.0",
+                "MinKernel": "24.0.0",
                 "Replace": binascii.unhexlify("554889E54889F890909090"),
                 "ReplaceMask": b"",
                 "Skip": 0
@@ -450,7 +450,7 @@ class BuildSecurity:
             "Limit": 0,
             "Mask": b"",
             "MaxKernel": "",
-            "MinKernel": "25.0.0", 
+            "MinKernel": "24.0.0", 
             "Replace": binascii.unhexlify("4883F98E9090"), 
             "ReplaceMask": b"",
             "Skip": 0
