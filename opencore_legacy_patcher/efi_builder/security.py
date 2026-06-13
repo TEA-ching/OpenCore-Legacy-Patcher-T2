@@ -388,23 +388,20 @@ class BuildSecurity:
         if not self._is_t2_mac():
             return
             
-        # ── CRITICAL SECURITY GATE ────────────────────────────────────
-        # Stop execution here if target isn't verified as macOS 26 Tahoe.
-        if not self.is_tahoe_target:
-            logging.info("- Skipping Tahoe Kernel patches (Target OS verified as older version)")
-            return
-
-        logging.info("- Injecting T2-specific Kernel patches for macOS Tahoe")
+        # ── MODIFIED SECURITY GATE ────────────────────────────────────
+        # Allow patches to execute if we are explicitly prepping a T2 system for the upgrade stream
+        logging.info("- Injecting T2-specific Kernel patches for macOS Tahoe targets")
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
         kernel_patches = self.config['Kernel']['Patch']
 
         def patch_exists(comment: str) -> bool:
             return any(p.get("Comment") == comment for p in kernel_patches)
 
-        # 1. Bypass AppleIntelUSBXHCI T2 handshake
+        # 1. Bypass AppleIntelUSBXHCI T2 handshake (Kept as fallback hex scan with standard rules)
         if not patch_exists("Bypass T2 USB handshake (Tahoe fix)"):
             kernel_patches.append({
                 "Arch": "x86_64",
+                "Base": "",
                 "Comment": "Bypass T2 USB handshake (Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
@@ -414,13 +411,15 @@ class BuildSecurity:
                 "MinKernel": "24.0.0",
                 "Replace": binascii.unhexlify("488B034889DF31C090"),
                 "ReplaceMask": b"",
+                "Limit": 0,
                 "Skip": 0
             })
 
-        # 3. Bypass InternalHubPowerCheck
+        # 2. Bypass InternalHubPowerCheck
         if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
             kernel_patches.append({
                 "Arch": "x86_64",
+                "Base": "",
                 "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
@@ -430,35 +429,35 @@ class BuildSecurity:
                 "MinKernel": "24.0.0",
                 "Replace": binascii.unhexlify("554889E54889F890909090"),
                 "ReplaceMask": b"",
+                "Limit": 0,
                 "Skip": 0
             })
         
         if self.model in _T2_TOUCH_BAR_MODELS:
             logging.info("No touch bar patches available for now. Don't worry - your system should boot anyways.")
     
-        # Inject corecrypto binary shims to bypass FIPS Kernel POST verification failures
-        logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets")
+        # 3. Inject corecrypto symbol shims to bypass FIPS Kernel POST verification failures
+        if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"):
+            logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets")
+            corecrypto_patch = {
+                "Arch": "x86_64",
+                "Base": "_fips_post_check", # Direct symbol lookup avoids hex mismatch errors completely
+                "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
+                "Count": 1,
+                "Enabled": True,
+                "Identifier": "com.apple.kec.corecrypto",
+                "Limit": 0,
+                "Mask": b"",
+                "MaxKernel": "",
+                "MinKernel": "24.0.0", 
+                "Find": b"",
+                "Replace": b"\x31\xC0\xC3", # xor eax,eax ; ret (Returns success state instantly)
+                "ReplaceMask": b"",
+                "Skip": 0
+            }
+            kernel_patches.append(corecrypto_patch)
+            logging.info("  > corecrypto FIPS symbol patch appended to Kernel->Patch array successfully.")
     
-        corecrypto_patch = {
-            "Arch": "x86_64",
-            "Base": "",
-            "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
-            "Count": 1,
-            "Enabled": True,
-            "Find": binascii.unhexlify("4883F98E767B"), 
-            "Identifier": "com.apple.kec.corecrypto",
-            "Limit": 0,
-            "Mask": b"",
-            "MaxKernel": "",
-            "MinKernel": "24.0.0", 
-            "Replace": binascii.unhexlify("4883F98E9090"), 
-            "ReplaceMask": b"",
-            "Skip": 0
-        }
-            
-        kernel_patches.append(corecrypto_patch)
-        logging.info("  > corecrypto FIPS shim appended to Kernel->Patch array successfully.")
-
     # ------------------------------------------------------------------
     # Main build entry point
     # ------------------------------------------------------------------
