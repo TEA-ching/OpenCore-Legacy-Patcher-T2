@@ -371,46 +371,64 @@ Und andere Fehler behoben
 ## 4.0.0 pre-alpha 6 for alpha 15 / 4.0.0 Voralpha 6 für Alpha 15
 This release:
 
-fixes WiFi/Bluetooth not working on iMac 2017 Retina 4K on macOS 26 Tahoe
-Downgrades Python to 3.13.13 so I can add support for macOS 10.13 High Sierra
-Now, OpenCore should boot from a seperate OpenCore partition instead from the EFI. This fixes an issue where the boot entries for other operating systems in the EFI may disappear. Also, it allows the T2 chip to verify the integrity of the EFI partition. This fixes #44 . And also, increases security.
-Fixes Settings UI bugs
+- fixes WiFi/Bluetooth not working on iMac 2017 Retina 4K on macOS 26 Tahoe
+- Downgrades Python to 3.13.13 so I can add support for macOS 10.13 High Sierra
+- Now, OpenCore should boot from a seperate OpenCore partition instead from the EFI. This fixes an issue where the boot entries for other operating systems in the EFI may disappear. Also, it allows the T2 chip to verify the integrity of the EFI partition. This fixes #44 . And also, increases security.
+- Fixes Settings UI bugs
 
 Diese Version:
 
-behebt WiFi/Bluetooth-Problem, indem iMac 2017 Retina 4K aufs macOS 26 Tahoe gar nicht funktionieren
-Downgraded Python zu version 3.13.14, um auf macOS 10.13 High Sierra auch zu funktionieren
-Nun sollte OpenCore von einer separaten OpenCore-Partition booten, anstatt aus der EFI. Dies behebt ein Problem, bei dem die Starteinträge für andere Betriebssysteme in der EFI verschwinden konnten. Zudem ermöglicht es dem T2-Chip, die Integrität der EFI-Partition zu überprüfen. Das behebt auch #44 . Auch, das selbst erhöht die Sicherheit des Betriebssystems.
-Behebt Fehlern in Einstellungen/Settings-Oberfläche
+- behebt WiFi/Bluetooth-Problem, indem iMac 2017 Retina 4K aufs macOS 26 Tahoe gar nicht funktionieren
+- Downgraded Python zu version 3.13.14, um auf macOS 10.13 High Sierra auch zu funktionieren
+- Nun sollte OpenCore von einer separaten OpenCore-Partition booten, anstatt aus der EFI. Dies behebt ein Problem, bei dem die Starteinträge für andere Betriebssysteme in der EFI verschwinden konnten. Zudem ermöglicht es dem T2-Chip, die Integrität der EFI-Partition zu überprüfen. Das behebt auch #44 . Auch, das selbst erhöht die Sicherheit des Betriebssystems.
+- Behebt Fehlern in Einstellungen/Settings-Oberfläche
 
 ## 4.0.0 pre-alpha 5 / 4.0.0 Voralpha 5
 Thanks @GUTY345 for contributing to this project!
 This release:
 
 begins implementing corecrypto kernel panic fixes, that other prealpha versions have - https://github.com/GUTY345/OpenCore-Legacy-patcher-t2chip-fixBugs/issues/8, #39
+
 Fixes bugs where OpenCore Legacy Patcher T2 may inject duplicate/conflicting NVRAM variables
+
 Fixes a bug where Macmini8,1 would say macOS 26 Tahoe is not supported on this Mac
+
 Fix injecting patches for unsupported Macs on MacBook Pro 2020 4 thunderbolt 3 ports which is natively supported
+
 Increasing minimum requirements for this patcher to run to macOS 10.15.7 Catalina (as pre-Python3.14 versions haven't been tested)
+
 Improve Intel UHD Graphics 617 support
+
 Fix UI stalls on Intel UHD Graphics 630
+
 Start implementing support for Intel Iris Graphics Plus 655
+
 Fixes several vulnerabilities:
+
 When OpenCore Legacy Patcher checks for disks, first tries to run code for macOS 10.13.x and if it fails, it falls back to 10.12.x code without strictly checking the macOS version on which is currently running. In that specific case, this allowed attackers to delete the hard disk from the dicitonary of the application to perform Denial of Service attacks.
+
 Fixes: Cross-Thread UI Race Conditions (Split-Event Vulnerability)
+
 The Vulnerability: the original error handling fired multiple sequential wx.CallAfter statements back-to-back from background worker threads. Because these events were split up in the main thread's queue, the OS event loop could process them out of order, try to redraw the screen mid-execution, or crash entirely if sys.exit() occurred before all elements finished processing.
+
 The Fix: Created atomic UI methods like _handle_fatal_failure and _finalize_ui_and_start_countdown. Now, background worker threads make exactly one single wx.CallAfter push. The progress bar animation stops, the value is reset, and the window state updates simultaneously inside a single main-thread transaction.
 
 Fixes: Main Thread UI Freezing & Application Hanging
+
 The Vulnerability: The original code used a while True: loop paired with time.sleep(1) inside the main initializer. Sleeping on the main thread starves the wxPython event loop, preventing the window from processing system paint messages, responding to clicks, or handling clean shutdowns.
+
 The Fix: The 5-second exit countdown has been completely rebuilt using a non-blocking wx.Timer (self.exit_timer). It allows the application to remain 100% responsive during the countdown, letting the OS handle background window cleanup cycles gracefully.
 
 Fixes: Hazardous Multi-Threaded Re-entrancy (wx.Yield Removal)
+
 The Vulnerability: The original architecture relied on wx.Yield() to manually force graphic redraws while blocking steps executed on the main thread. In a multi-threaded app, unexpected yields allow new user interactions (like clicking buttons twice) to run over old execution paths, causing severe multi-threaded corruption and race states.
+
 The Fix: Every single instance of wx.Yield() has been eliminated. All blocking operations—downloading, extracting, and running system commands—are completely isolated inside a master orchestration background worker thread (_workflow_thread).
 
 Fixes: Personal Fork Phishing / Hardcoded URL Risk
+
 The Vulnerability: The old code contained a hardcoded error string pointing to a user's personal GitHub fork (https://github.com/albert-mueller/...). If that personal account were compromised or abandoned, attackers could use the error text to trick users into downloading malicious system packages.
+
 The Fix: The personal URL was removed. The fallback logic now pulls dynamically from your application's centralized global configuration configuration file (self.constants.support_url), maintaining a centralized and verifiable point of trust.
 
 ## 4.0.0 pre-alpha 4 / 4.0.0 Voralpha 4
