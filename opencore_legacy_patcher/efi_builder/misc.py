@@ -551,25 +551,6 @@ class BuildMiscellaneous:
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
         kernel_patches = self.config['Kernel']['Patch']
 
-        if not any(p.get("Comment") == "Bypass FIPS Kernel POST Panic (-2074)" for p in kernel_patches):
-            logging.info("  > Injecting corecrypto FIPS compliance bypass binary patch (Pure Find-Byte Path)")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",  # Zwingend leer, da die Symbolsuche auf Tahoe fehlschlägt
-                "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
-                "Count": 1,
-                "Enabled": True,
-                "Identifier": "com.apple.kec.corecrypto",
-                "Limit": 0,
-                "MinKernel": "24.0.0",
-                "MaxKernel": "",
-                "Find": binascii.unhexlify("554889E54157415641554154534881EC98000000"),
-                "Mask": b"",
-                "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"),  # xor eax, eax ; ret + NOPs
-                "ReplaceMask": b"",
-                "Skip": 0
-            })
-
         # 2. Disable xART validation capacity loop checks safely (Pure Find-Byte Path)
         if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
             logging.info("  > Injecting AppleSEPManager text segment check bypass via direct bytes")
@@ -590,23 +571,26 @@ class BuildMiscellaneous:
                 "Skip": 0
             })
 
-        # 3. Force AppleSEPDeviceService OOL constraints (Pure Find-Byte Path)
+        # 3. Force AppleSEPDeviceService OOL constraints (Tahoe Fix) - REPARIERT
         if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
-            logging.info("  > Injecting AppleSEPDeviceService OOL payload byte-override")
+            logging.info("  > Injecting verified AppleSEPDeviceService OOL payload bypass")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "",  # C++ Mangled Name entfernt
+                # Der exakte, gemangelte Name der IOKit-Dienst-Funktion:
+                "Base": "__ZN21AppleSEPDeviceService23get_max_ool_send_pagesEv",
                 "Comment": "Hardcode SEP OOL Max Send Pages Limit",
                 "Count": 1,
                 "Enabled": True,
                 "Identifier": "com.apple.driver.AppleSEPManager",
+                "Limit": 0,
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                "Find": binascii.unhexlify("8B472C85C0740A"),
-                "Replace": binascii.unhexlify("B840000000C390"),  # mov eax, 0x40 ; ret + NOP
+                # Standard-Funktionsprolog (push rbp; mov rbp, rsp):
+                "Find": binascii.unhexlify("554889E5"),
+                # Überschreibt den Einstieg: mov eax, 0x40 ; ret (Setzt das Limit hart auf 64 Seiten)
+                "Replace": binascii.unhexlify("B840000000C3"), 
                 "ReplaceMask": b"",
-                "Limit": 0,
                 "Skip": 0
             })
 
