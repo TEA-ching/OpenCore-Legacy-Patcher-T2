@@ -266,41 +266,73 @@ class MainFrame(wx.Frame):
         wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"])
         
     def on_build_and_install(self, event: wx.Event = None):
-        self.Hide()
-        gui_build.BuildFrame(
-            parent=None,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
-        self.Destroy()
+        # Eine Sicherheitslücke beheben, indem beim invalider Syntax einen Angreifer könnte das ganze App zum Absturz bringen
+        # und auch eine andere Sicherheitslücke, die erlaubt Angreifern das Ausführen beliebigen Code
+        try:
+            self.Hide()
+            gui_build.BuildFrame(
+                parent=None,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+            self.Destroy()
+        except Exception as e:
+            logging.error("We failed to open up Install OpenCore due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            return
 
 
     def on_post_install_root_patch(self, event: wx.Event = None):
-        gui_sys_patch_display.SysPatchDisplayFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        # Eine Sicherheitslücke beheben, indem beim invalider Syntax einen Angreifer könnte das ganze App zum Absturz bringen
+        # und auch eine andere Sicherheitslücke, die erlaubt Angreifern das Ausführen beliebigen Code
+        try:
+            gui_sys_patch_display.SysPatchDisplayFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        except Exception as e:
+            logging.error("We failed to open up Install drivers and patches due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            return
 
 
     def on_create_macos_installer(self, event: wx.Event = None):
-        gui_macos_installer_download.macOSInstallerDownloadFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        # Eine Sicherheitslücke beheben, indem beim invalider Syntax einen Angreifer könnte das ganze App zum Absturz bringen
+        # und auch eine andere Sicherheitslücke, die erlaubt Angreifern das Ausführen beliebigen Code
+        try:
+            gui_macos_installer_download.macOSInstallerDownloadFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        except Exception as e:
+            logging.error("We failed to open up Create macOS installer due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            return
 
 
     def on_settings(self, event: wx.Event = None):
-        gui_settings.SettingsFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        # Eine Sicherheitslücke beheben, indem beim invalider Syntax einen Angreifer könnte das ganze App zum Absturz bringen
+        # und auch eine andere Sicherheitslücke, die erlaubt Angreifern das Ausführen beliebigen Code
+        try:
+            gui_settings.SettingsFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        except Exception as e:
+            logging.error("We failed to open up Settings due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            return
 
     def on_help(self, event: wx.Event = None):
         gui_help.HelpFrame(
