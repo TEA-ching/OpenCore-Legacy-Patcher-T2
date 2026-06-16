@@ -95,9 +95,9 @@ class BuildOpenCore:
                 logging.info("Bitte wählen Sie macOS 26 oder ältere Version.")
                 sys.exit(1)
             else:
-                continue
+                pass
         except Exception as e:
-            continue
+            pass
                 
         utilities.cls()
         logging.info(f"Building Configuration {'for external' if self.constants.custom_model else 'on model'}: {self.model}")
