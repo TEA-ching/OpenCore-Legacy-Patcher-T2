@@ -516,8 +516,55 @@ class PatchSysVolume:
                         # Check whether to source from root
                         if not required_patches[patch][method_type][install_patch_directory][install_file].startswith("/"):
                             source_file = source_files_path + "/" + source_file
+
+                        # Check if file exists, if not try to find a compatible version
                         if not Path(source_file).exists():
-                            raise Exception(f"Failed to find {source_file}")
+                            # Workaround for missing airportd in macOS 26 Tahoe (13.7.2-25)
+                            logging.warning(f"Primary source file not found: {source_file}, attempting fallback...")
+
+                            # Extract the base filename and try to find it in other versions
+                            filename = install_file
+                            base_path = Path(source_files_path) / install_patch_directory.lstrip("/")
+
+                            # Try to find the file in other version directories
+                            found_file = None
+                            if base_path.exists():
+                                for potential_file in base_path.rglob(filename):
+                                    if potential_file.is_file():
+                                        found_file = potential_file
+                                        logging.info(f"Found fallback file: {found_file}")
+                                        break
+
+                            if found_file:
+                                # Update the patchset to use the found file
+                                version_path = found_file.parent.name
+                                required_patches[patch][method_type][install_patch_directory][install_file] = version_path
+                                source_file = str(found_file)
+                            else:
+                                logging.error(f"Failed to find {filename} in any version directory")
+                                # Mark this file for removal rather than removing during iteration
+                                if 'files_to_remove' not in locals():
+                                    files_to_remove = {}
+                                if patch not in files_to_remove:
+                                    files_to_remove[patch] = {}
+                                if method_type not in files_to_remove[patch]:
+                                    files_to_remove[patch][method_type] = {}
+                                if install_patch_directory not in files_to_remove[patch][method_type]:
+                                    files_to_remove[patch][method_type][install_patch_directory] = []
+                                files_to_remove[patch][method_type][install_patch_directory].append(install_file)
+                                continue
+
+        # Remove files that were not found after iteration to avoid "dictionary changed size" error
+        if 'files_to_remove' in locals():
+            for patch in files_to_remove:
+                for method_type in files_to_remove[patch]:
+                    for install_patch_directory in files_to_remove[patch][method_type]:
+                        for install_file in files_to_remove[patch][method_type][install_patch_directory]:
+                            if (install_file in required_patches[patch][method_type][install_patch_directory]):
+                                del required_patches[patch][method_type][install_patch_directory][install_file]
+                        # Remove empty directories
+                        if not required_patches[patch][method_type][install_patch_directory]:
+                            del required_patches[patch][method_type][install_patch_directory]
 
         # Make sure old SkyLight plugins aren't being used
         self._clean_skylight_plugins()
