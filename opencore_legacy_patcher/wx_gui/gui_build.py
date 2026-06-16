@@ -8,6 +8,9 @@ import threading
 import traceback
 import time
 import webbrowser
+import wx.html2
+import markdown2
+import urllib.parse
 
 from .. import constants
 
@@ -52,6 +55,76 @@ class BuildFrame(wx.Frame):
         self._invoke_build()
 
 
+    def on_build_failure(self) -> None:
+        """
+        Custom error dialog that provides a direct 'Ask Gemini' bridge 
+        for debugging complex build errors.
+        """
+        dlg = wx.Dialog(self, title="Build Error", size=(450, 250))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Build error explanation
+        msg = wx.StaticText(dlg, label="An error occurred while building OpenCore.\n\n"
+                                       "If you are unsure how to fix this, you can ask \n"
+                                       "Gemini for a technical analysis of your build log.")
+        sizer.Add(msg, 0, wx.ALL | wx.CENTER, 20)
+
+        # Button Row: Ask Gemini | View Log | Close
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        gemini_btn = wx.Button(dlg, label="Ask Gemini")
+        gemini_btn.Bind(wx.EVT_BUTTON, lambda e: self.on_ask_gemini())
+        
+        close_btn = wx.Button(dlg, wx.ID_CANCEL, label="Close")
+        
+        btn_sizer.Add(gemini_btn, 0, wx.ALL, 5)
+        btn_sizer.Add(close_btn, 0, wx.ALL, 5)
+        
+        sizer.Add(btn_sizer, 0, wx.CENTER)
+        dlg.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def copy_to_clipboard(self):
+        # 1. Get the error log
+        log_content = self.text_box.GetValue().splitlines()[-15:]
+        error_text = "Analyze this OpenCore build error: " + " ".join(log_content)
+        """Copies the error to the clipboard and opens Gemini for the user."""
+        # 1. Capture the log
+        log_content = self.text_box.GetValue().splitlines()[-15:]
+        error_text = "\n".join(log_content)
+        
+        # 2. Copy to system clipboard
+        if wx.TheClipboard.Open():
+            wx.TheClipboard.SetData(wx.TextDataObject(error_text))
+            wx.TheClipboard.Close()
+            
+        # 3. Inform the user what just happened
+        wx.MessageBox(
+            "The error log has been copied to your clipboard.\n\n"
+            "1. Gemini will now open in a new window.\n"
+            "2. Simply paste (Cmd+V) your error log into the chat box.",
+            "Ask Gemini", 
+            wx.OK | wx.ICON_INFORMATION
+        )
+        
+    def on_ask_gemini(self) -> None:
+        self.copy_to_clipboard()
+        dlg = wx.Dialog(self, title="Ask Gemini Analysis", size=(800, 600))
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        webview = wx.html2.WebView.New(dlg)
+        
+        # REMOVE OR COMMENT OUT THIS LINE:
+        # webview.Bind(wx.html2.EVT_WEBVIEW_LOADED, on_load)
+        
+        webview.LoadURL("https://gemini.google.com/")
+        
+        sizer.Add(webview, 1, wx.EXPAND)
+        dlg.SetSizer(sizer)
+        dlg.ShowModal()
+        dlg.Destroy()
+    
     def _generate_elements(self, frame: wx.Frame = None) -> None:
         """
         Generate UI elements for build frame
@@ -113,23 +186,17 @@ class BuildFrame(wx.Frame):
 
         # Check if config.plist was built
         if self.build_successful is False:
+            self.on_build_failure()
+            return
+        else:
             dialog = wx.MessageDialog(
                 parent=self,
-                message="An error occurred while building OpenCore",
-                caption="Error building OpenCore",
-                style=wx.OK | wx.ICON_ERROR
+                message=f"Would you like to install OpenCore now?",
+                caption="Finished building your OpenCore configuration!",
+                style=wx.YES_NO | wx.ICON_QUESTION
             )
-            dialog.ShowModal()
-            return
-
-        dialog = wx.MessageDialog(
-            parent=self,
-            message=f"Would you like to install OpenCore now?",
-            caption="Finished building your OpenCore configuration!",
-            style=wx.YES_NO | wx.ICON_QUESTION
-        )
-        dialog.SetYesNoLabels("Install to disk", "View build log")
-
+            dialog.SetYesNoLabels("Install to disk", "View build log")
+    
         self.on_install() if dialog.ShowModal() == wx.ID_YES else self.install_button.Enable()
 
 

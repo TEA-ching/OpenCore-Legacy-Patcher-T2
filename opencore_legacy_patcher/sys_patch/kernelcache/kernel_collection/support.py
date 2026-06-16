@@ -4,6 +4,7 @@ support.py: Kernel Cache support functions
 
 import logging
 import plistlib
+import sys
 
 from pathlib  import Path
 from datetime import datetime

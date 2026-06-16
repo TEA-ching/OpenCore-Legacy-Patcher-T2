@@ -1,6 +1,8 @@
 """
 cache.py: Base class for kernel cache management
 """
+import sys
+import logging
 
 class BaseKernelCache:
 

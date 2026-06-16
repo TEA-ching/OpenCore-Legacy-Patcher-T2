@@ -1,5 +1,5 @@
 """
-gui_help.py: GUI Help Menu
+gui_help.py: GUI Help Menu with added Repository Support Resources
 """
 
 import wx
@@ -7,8 +7,9 @@ import logging
 import webbrowser
 
 from .. import constants
-
 from ..wx_gui import gui_support
+
+logger = logging.getLogger(__name__)
 
 
 class HelpFrame(wx.Frame):
@@ -16,15 +17,16 @@ class HelpFrame(wx.Frame):
     Append to main menu through a modal dialog
     """
     def __init__(self, parent: wx.Frame, title: str, global_constants: constants.Constants, screen_location: tuple = None) -> None:
-        logging.info("Initializing Help Frame")
-        self.dialog = wx.Dialog(parent, title=title, size=(300, 200))
+        logger.info("Initializing Help Frame")
+        
+        # INCREASED BASE SIZE: Changed vertical boundary constraint from 200 to 300 to accommodate more buttons cleanly
+        self.dialog = wx.Dialog(parent, title=title, size=(300, 320))
 
         self.constants: constants.Constants = global_constants
         self.title: str = title
 
         self._generate_elements(self.dialog)
         self.dialog.ShowWindowModal()
-
 
     def _generate_elements(self, frame: wx.Frame = None) -> None:
         """
@@ -33,40 +35,51 @@ class HelpFrame(wx.Frame):
             - Text:  Following resources are available:
             - Button: Official Guide
             - Button: Community Discord Server
-            - Button: Official Phone Support
+            - Button: Bug Reports / GitHub Issues  <-- Added
+            - Button: Community Discussions        <-- Added
             - Button: Return to Main Menu
         """
-
         frame = self if not frame else frame
 
-        title_label = wx.StaticText(frame, label="Patcher Resources", pos=(-1,5))
+        # 1. Main Title Header
+        title_label = wx.StaticText(frame, label="Patcher Resources", pos=(-1, 10))
         title_label.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
         title_label.Centre(wx.HORIZONTAL)
 
-        text_label = wx.StaticText(frame, label="Following resources are available:", pos=(-1,30))
+        # 2. Informational Context Label
+        text_label = wx.StaticText(frame, label="Following resources are available:", pos=(-1, 40))
         text_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
         text_label.Centre(wx.HORIZONTAL)
 
-        buttons = {
-            "Official Guide":           self.constants.guide_link,
-            "Official Phone Support":   "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            "Community Discord Server": self.constants.discord_link,
-        }
+        # Track the starting Y position dynamically below the description text block
+        current_y = text_label.GetPosition()[1] + text_label.GetSize()[1] + 15
+        button_spacing = 35  # Clean pixel tracking padding gaps between buttons
 
-        for button in buttons:
-            help_button = wx.Button(frame, label=button, pos=(-1, text_label.GetPosition()[1] + text_label.GetSize()[1] + (list(buttons.keys()).index(button) * 30)), size=(200, 30))
-            help_button.Bind(wx.EVT_BUTTON, lambda event, temp=buttons[button]: webbrowser.open(temp))
+        # Define external target items using structured tuples instead of a dict mapping loop
+        # Pulls from constants.py configuration bindings cleanly
+        resource_links = [
+            ("View official GitHub Issues", getattr(self.constants, "github_issues_link", "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")),
+            ("Join official GitHub Discussions", getattr(self.constants, "github_discussions_link", "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/discussions")),
+            ("Dortania's Guide", self.constants.guide_link),
+            ("Community Discord Server", self.constants.discord_link),
+        ]
+
+        # 3. Dynamic External Link Button Generation
+        for label, url in resource_links:
+            help_button = wx.Button(frame, label=label, pos=(-1, current_y), size=(220, 30))
+            
+            # Bound the lambda environment execution target safely using fixed parameter signatures
+            help_button.Bind(wx.EVT_BUTTON, lambda event, target_url=url: webbrowser.open(target_url))
             help_button.Centre(wx.HORIZONTAL)
+            
+            # Step the coordinate down for the next item element sequence
+            current_y += button_spacing
 
-        # Button: Return to Main Menu
-        return_button = wx.Button(frame, label="Return to Main Menu", pos=(-1, help_button.GetPosition()[1] + help_button.GetSize()[1]), size=(150, 30))
+        # 4. Return to Main Menu Action Button
+        current_y += 10  # Add a slight visual separation gap before the close action button
+        return_button = wx.Button(frame, label="Return to Main Menu", pos=(-1, current_y), size=(160, 30))
         return_button.Bind(wx.EVT_BUTTON, lambda event: frame.Close())
         return_button.Centre(wx.HORIZONTAL)
 
-        # Set size of frame
-        frame.SetSize((-1, return_button.GetPosition()[1] + return_button.GetSize()[1] + 40))
-
-
-
-
-
+        # Automatically wrap structural layout scaling to avoid text truncation on varied OS platforms
+        frame.SetSize((-1, return_button.GetPosition()[1] + return_button.GetSize()[1] + 45))

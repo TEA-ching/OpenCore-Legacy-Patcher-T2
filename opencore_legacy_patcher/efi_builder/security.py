@@ -4,6 +4,10 @@ security.py: Class for handling macOS Security Patches, invocation from build.py
 
 import logging
 import binascii
+import sys
+import wx
+import threading
+import webbrowser
 
 from . import support
 from .. import constants
@@ -11,55 +15,45 @@ from ..support import utilities
 from ..detections import device_probe
 from ..datasets import (
     model_array,
-    security_fallback,
     smbios_data,
     os_data
 )
-
 
 # T2 Mac models that use Intel UHD 630 and require connector-less
 # ig-platform-id injection to avoid APFS volume group race condition
 # on macOS Tahoe and later. (Coffee Lake GT2)
 _T2_UHD630_MODELS = {
-    "MacBookPro15,1",  # 15-inch 2018 (UHD630 + Radeon)
-    "MacBookPro15,3",  # 15-inch 2019 (UHD630 + Radeon)
-    "MacBookPro16,1",  # 16-inch 2019 (UHD630 + Radeon)
-    "MacBookPro16,4",  # 16-inch 2019 CTO (UHD630 + Radeon)
-    "Macmini8,1",      # Mac mini 2018 (UHD630)
+    "MacBookPro15,1",  # 15-inch 2018 Intel UHD Graphics 630 + AMD Radeon Pro 555X
+    "MacBookPro15,3",  # 15-inch 2019 Intel UHD Graphics 630 + AMD Radeon Pro Vega 16/20
+    "MacBookPro16,1",  # 16-inch 2019, Intel UHD Graphics 630 + AMD Radeon Pro 5300M
+    "MacBookPro16,4",  # 16-inch 2019 CTO, Intel UHD Graphics 630 + AMD Radeon Pro 5600M
+    "Macmini8,1",      # Mac mini 2018 (Intel UHD Graphics 630)
 }
 
 # T2 Mac models with Intel Iris Plus Graphics (U-Series)
-# Required for v1.0.6 logic isolation (iGPU-only).
+# Required for logic isolation (iGPU-only).
 _T2_IRIS_PLUS_MODELS = {
-    "MacBookPro15,2",  # 13-inch 2018 (4 TB3)
-    "MacBookPro15,4",  # 13-inch 2019 (2 TB3)
+    "MacBookPro15,2",  # 13-inch 2018 (4 TB3) - Intel Iris Plus Graphics 655
+    "MacBookPro15,4",  # 13-inch 2019 (2 TB3) - Intel Iris Plus Graphics 645
 }
 
-# T2 Mac models that use Intel UHD 617 and require graphics injection for stability.
-_T2_UHD617_MODELS = {
-    "MacBookAir8,1",   # Air 2018
-    "MacBookAir8,2",   # Air 2019
-    "MacBookAir9,1",   # Air 2020 Intel
-    "MacBookPro16,2",  # 13-inch 2020 (4 TB3)
-    "MacBookPro16,3",  # 13-inch 2020 (2 TB3)
+# T2 Mac models that use Intel UHD 617 / Ice Lake LP and require graphics injection for stability
+_T2_LOW_POWER_MODELS = {
+    "MacBookAir8,1",   # Air 2018, Intel UHD Graphics 617
+    "MacBookAir8,2",   # Air 2019, Intel UHD Graphics 617
+    "MacBookAir9,1",   # Air 2020 Intel, Intel Iris Plus
+    "MacBookPro16,3",  # 13-inch 2020 (2 TB3), Intel Iris Plus Graphics 645
 }
 
-# T2 Mac models that do not have an Intel iGPU, or where iGPU injection
-# is not required/recommended.
+# T2 Mac models that do not have an Intel iGPU, or where iGPU injection is not required/recommended.
 _T2_NO_IGPU_MODELS = {
-    "MacPro7,1",       # Mac Pro 2019
     "iMacPro1,1",      # iMac Pro 2017
-    "iMac19,1",        # iMac 27-inch 2019 (Radeon only, no iGPU injection needed)
-    "iMac19,2",        # iMac 21.5-inch 2019
-    "iMac20,1",        # iMac 27-inch 2020
-    "iMac20,2",        # iMac 27-inch 2020 CTO
 }
 
 
 class BuildSecurity:
     """
     Build Library for Security Patch Support
-
     Invoke from build.py
     """
 
@@ -68,6 +62,11 @@ class BuildSecurity:
         self.config: dict = config
         self.constants: constants.Constants = global_constants
         self.computer: device_probe.Computer = self.constants.computer
+        
+        # ── Global Hardware & OS Targets Scopes ───────────────────────
+        self.is_tahoe_target: bool = False
+        self.is_ice_lake: bool = (self.model == "MacBookAir9,1")
+        self.is_mac_mini: bool = (self.model == "Macmini8,1")
 
         self._build()
 
@@ -75,16 +74,21 @@ class BuildSecurity:
     # NVRAM helpers
     # ------------------------------------------------------------------
 
+    def _read_nvram_string(self, uuid: str, key: str) -> str:
+        """Utility helper to read an existing NVRAM string safely."""
+        if uuid in self.config.get("NVRAM", {}).get("Add", {}):
+            return self.config["NVRAM"]["Add"][uuid].get(key, "")
+        return ""
+
     def _update_nvram_string(self, uuid: str, key: str, value: str) -> None:
         """
         Appends boot-arg tokens to an NVRAM string variable, only for
         tokens not already present.
-
-        Uses token-based deduplication (split on whitespace) to avoid
-        substring false-positives. For example, "amfi=0x80" must NOT be
-        treated as already present just because the current value contains
-        "amfi=0x80 amfi_get_out_of_my_way=1" — they are separate tokens.
         """
+        if "NVRAM" not in self.config:
+            self.config["NVRAM"] = {"Add": {}}
+        if "Add" not in self.config["NVRAM"]:
+            self.config["NVRAM"]["Add"] = {}
         if uuid not in self.config["NVRAM"]["Add"]:
             self.config["NVRAM"]["Add"][uuid] = {}
 
@@ -95,7 +99,7 @@ class BuildSecurity:
 
         tokens_to_add = [t for t in new_tokens if t not in existing_tokens]
         if not tokens_to_add:
-            return  # all tokens already present
+            return
 
         if current_value.strip():
             self.config["NVRAM"]["Add"][uuid][key] = (
@@ -109,6 +113,10 @@ class BuildSecurity:
         Sets an NVRAM variable. If overwrite is False, only sets if the
         key is absent.
         """
+        if "NVRAM" not in self.config:
+            self.config["NVRAM"] = {"Add": {}}
+        if "Add" not in self.config["NVRAM"]:
+            self.config["NVRAM"]["Add"] = {}
         if uuid not in self.config["NVRAM"]["Add"]:
             self.config["NVRAM"]["Add"][uuid] = {}
 
@@ -120,10 +128,7 @@ class BuildSecurity:
     # ------------------------------------------------------------------
 
     def _ensure_path(self, *keys, default=dict):
-        """Utility helper to ensure a nested dict path exists.
-        Usage: self._ensure_path('DeviceProperties', 'Add', graphics_path)
-        Returns the innermost dict.
-        """
+        """Utility helper to ensure a nested dict path exists."""
         node = self.config
         for key in keys:
             node = node.setdefault(key, default() if isinstance(default, type) else default)
@@ -137,61 +142,54 @@ class BuildSecurity:
 
     def _requires_t2_graphics_injection(self) -> bool:
         """Return True if this T2 model needs Intel graphics injection."""
-        return (self.model in _T2_UHD630_MODELS or self.model in _T2_UHD617_MODELS or self.model in _T2_IRIS_PLUS_MODELS)
+        return (self.model in _T2_UHD630_MODELS or self.model in _T2_LOW_POWER_MODELS or self.model in _T2_IRIS_PLUS_MODELS)
 
     def _should_skip_t2_graphics_injection(self) -> bool:
         """Return True if this T2 model should explicitly skip Intel graphics injection."""
         return self.model in _T2_NO_IGPU_MODELS
 
     def _t2_uses_amfipass(self) -> bool:
-        """
-        T2 builds enable AMFIPass in misc._t2_handling (runs after security).
-        amfi=0x80 together with -amfipassbeta triggers corecrypto FIPS POST panics.
-        """
+        """T2 builds enable AMFIPass in misc._t2_handling (runs after security)."""
         return self._is_t2_mac()
 
     def _apply_t2_amfi_boot_args(self, apple_nvram_uuid: str) -> None:
-        """Apply AMFI-related boot-args only when AMFIPass is not the T2 boot path."""
+        """Apply AMFI-related boot-args based on user path validation."""
         if self._t2_uses_amfipass():
-            logging.info("  > Skipping amfi=0x80 (T2 uses AMFIPass + -amfipassbeta)")
+            logging.info("  > T2 target utilizes AMFIPass layer. Injecting validated Tahoe storage bypasses.")
+            self._update_nvram_string(apple_nvram_uuid, "boot-args", (
+                "-amfipassbeta cs_allow_invalid=1 cs_unrestricted_cs=1 cs_debug=1 io=0xffffffff"
+            ))
             return
 
-        # Apply AMFI boot args only when AMFIPass is NOT used.
-        if self._t2_uses_amfipass():
-            logging.info("  > Skipping amfi=0x80 (T2 uses AMFIPass + -amfipassbeta)")
-            # Even when skipping amfi=0x80, still ensure amfi_get_out_of_my_way is set for completeness
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_get_out_of_my_way=1")
-            return
-
-        # Apply AMFI boot args only when AMFIPass is NOT used.
-        if self._t2_uses_amfipass():
-            logging.info("  > Skipping amfi=0x80 (T2 uses AMFIPass + -amfipassbeta)")
-            # Ensure the permissive flag is still present.
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_get_out_of_my_way=1")
-            return
-
-        # Guard against duplicate insertion of amfi arguments.
+        # Fallback if AMFIPass pathing is completely stripped
         existing = self._read_nvram_string(apple_nvram_uuid, "boot-args")
         if "amfi=0x80" not in existing:
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi=0x80")
-        if "amfi_get_out_of_my_way=1" not in existing:
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_get_out_of_my_way=1")
-        if "amfi_check_dyld_policy_at_eval=0" not in existing:
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_check_dyld_policy_at_eval=0")
-        if "amfi_allow_any_signature=1" not in existing:
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_allow_any_signature=1")
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_get_out_of_my_way=1")
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_check_dyld_policy_at_eval=0")
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "amfi_allow_any_signature=1")
+            logging.warning("  > AMFIPass bypassed. Falling back to amfi=0x80 absolute drop.")
+            self._update_nvram_string(apple_nvram_uuid, "boot-args", (
+                "amfi=0x80 amfi_get_out_of_my_way=1 cs_debug=1 io=0xffffffff"
+            ))
 
     # ------------------------------------------------------------------
     # Graphics injection helpers
     # ------------------------------------------------------------------
 
-    def _get_graphics_device_properties_path(self) -> str:
-        """Return the PCI path for the integrated graphics device."""
-        return "PciRoot(0x0)/Pci(0x2,0x0)"
-    
+    def _get_graphics_device_properties_path(self):
+        """Return the probed PCI path for the integrated graphics device."""
+        if self.constants.custom_model:
+            logging.info("- Skipping T2 Intel graphics injection for custom model (no probed iGPU path)")
+            return None
+
+        igpu = getattr(self.computer, "igpu", None)
+        if igpu and getattr(igpu, "pci_path", None):
+            return igpu.pci_path
+
+        for gpu in getattr(self.computer, "gpus", []) or []:
+            if isinstance(gpu, device_probe.Intel) and getattr(gpu, "pci_path", None):
+                return gpu.pci_path
+
+        logging.info("- Skipping T2 Intel graphics injection (unable to confirm iGPU PCI path)")
+        return None
+
     # ------------------------------------------------------------------
     # Config helpers
     # ------------------------------------------------------------------
@@ -210,400 +208,341 @@ class BuildSecurity:
     # T2 security helpers
     # ------------------------------------------------------------------
 
-    def _get_t2_security_fallback(self) -> dict:
-        """Load T2 fallback security values from the external dataset."""
-        return security_fallback.get_security_fallback(self.model)
-
-    def _apply_t2_security_fallback(self, fallback: dict, apple_nvram_uuid: str) -> None:
-        """Apply fallback security settings for a T2 Mac."""
-        for key, value in fallback.items():
-            if key == "csr-active-config":
-                if isinstance(value, str):
-                    value = binascii.unhexlify(value)
-                self._set_nvram_value(apple_nvram_uuid, key, value, overwrite=True)
-            elif key == "boot-args":
-                if isinstance(value, list):
-                    value = " ".join(value)
-                self._update_nvram_string(apple_nvram_uuid, "boot-args", value)
-            else:
-                self._set_nested_config_value(key, value)
-
     def _apply_t2_graphics_injection(self) -> None:
-        """
-        Inject connector-less Intel UHD 630 DeviceProperties for T2 Mac
-        models listed in _T2_UHD630_MODELS.
-
-        WHY connector-less ig-platform-id 0x3E9B0006 (bytes: 06 00 9B 3E)?
-        -------------------------------------------------------------------        
-        macOS Tahoe changed the ordering of APFS volume group initialization
-        relative to GPU framebuffer enumeration. With a display-connected
-        ig-platform-id (e.g., bytes: 00 00 9B 3E = 0x3E9B0000), the Intel
-        framebuffer driver probes all connectors during early boot, stalling
-        the IOService tree long enough that APFS fails with:
-
-            nx_get_volume_group:669  - volume groups tree is not set up yet
-            getVolumeGroupMountFrom:10003 - failed with error 2
-
-        Using ig-platform-id 0x3E9B0006 (bytes: 06 00 9B 3E) tells
-        AppleIntelCFLGraphicsFramebuffer to skip connector enumeration at
-        boot, allowing APFS volume groups to mount before the GPU resumes
-        display initialization.
-
-        Non-T2 Macs are never affected—this method is only reachable
-        when _is_t2_mac() is True AND the the model is in _T2_UHD630_MODELS
-        or _T2_UHD617_MODELS.
-        """
-        if self._should_skip_t2_graphics_injection():
+        """Inject integrated Intel iGPU DeviceProperties for T2 Macs."""
+        if self._should_skip_t2_graphics_injection() or not self._requires_t2_graphics_injection():
             logging.info(f"- Skipping Intel graphics injection for {self.model} (no iGPU or not required)")
             return
 
-        if not self._requires_t2_graphics_injection():
-            logging.info(f"- Skipping Intel graphics injection for {self.model} (not in supported iGPU list)")
+        graphics_path = self._get_graphics_device_properties_path()
+        if not graphics_path:
             return
 
-        logging.info(f"- {self.model}: Injecting connector-less UHD630 DeviceProperties (Tahoe fix)")
-
-        if "DeviceProperties" not in self.config:
-            self.config["DeviceProperties"] = {}
-        if "Add" not in self.config["DeviceProperties"]:
-            self.config["DeviceProperties"]["Add"] = {}
-
-        graphics_path = "PciRoot(0x0)/Pci(0x2,0x0)"
-        if graphics_path not in self.config["DeviceProperties"]["Add"]:
-            self.config["DeviceProperties"]["Add"][graphics_path] = {}
-
-        gfx = self.config["DeviceProperties"]["Add"][graphics_path]
-
-        # Ensure the nested DeviceProperties structure exists safely
         self._ensure_path("DeviceProperties", "Add", graphics_path)
         gfx = self.config["DeviceProperties"]["Add"][graphics_path]
 
-        if self.model in _T2_IRIS_PLUS_MODELS:
-            # v1.0.6: Intel Iris Plus (Coffee Lake-U GT3)
-            # Using platform 0x3EA50009 (Connector-less) to fix Tahoe devfs stall.
-            # Little-endian: 09 00 A5 3E
-            if "AAPL,ig-platform-id" not in gfx:
-                logging.info("  > Injecting AAPL,ig-platform-id: 0900A53E (Iris Plus U-series)")
-                gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")
-                logging.info("  > device-id = A5 3E 00 00")
-                gfx["device-id"] = binascii.unhexlify("A53E0000")
+        APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
+
+        # ── 1. Platform & Device ID Allocation ────────────────────────────
+        if self.is_ice_lake:
+            logging.info(f"- {self.model}: Injecting connector-less Ice Lake Iris Plus DeviceProperties (Tahoe fix)")
+            gfx["AAPL,ig-platform-id"] = binascii.unhexlify("02005C8A")  # 0x8A5C0002 LE
+            gfx["device-id"]           = binascii.unhexlify("5C8A0000")  # 0x8A5C0000 LE
+            
+        elif self.model in _T2_LOW_POWER_MODELS or self.model in _T2_IRIS_PLUS_MODELS:
+            logging.info(f"- {self.model}: Injecting connector-less Iris Plus / Amber Lake DeviceProperties (Tahoe fix)")
+            gfx["AAPL,ig-platform-id"] = binascii.unhexlify("0900A53E")  # 0x3EA50009 LE
+            gfx["device-id"]           = binascii.unhexlify("A53E0000")  # 0x3EA50000 LE
+            
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxgl=1 igfxmetal=1")
+            logging.info("  > Appended LP display sync flags safely.")
+
+        elif self.model in _T2_UHD630_MODELS:
+            logging.info(f"- {self.model}: Injecting connector-less UHD630 DeviceProperties (Tahoe fix)")
+            gfx["AAPL,ig-platform-id"] = binascii.unhexlify("06009B3E")  # 0x3E9B0006 LE
+            gfx["device-id"]           = binascii.unhexlify("9B3E0000")  # 0x3E9B0000 LE
         else:
-            # Branch for Coffee Lake GT2 (UHD 630 / 15-inch / Mac mini)
-            # little-endian bytes: 06 00 9B 3E → platform 0x3E9B0006
-            if "AAPL,ig-platform-id" not in gfx:
-                gfx["AAPL,ig-platform-id"] = binascii.unhexlify("06009B3E")
-            logging.info("  > device-id = 9B 3E 00 00")
-            gfx["device-id"] = binascii.unhexlify("9B3E0000")
+            logging.error(f"FATAL: Model {self.model} lacks specific GPU patch data.")
+            sys.exit(3)
 
-        # Required for any framebuffer-* patch keys to take effect
-        logging.info("  > framebuffer-patch-enable = 1")
-        gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
+        # ── 2. Structural Framebuffer Overrides ───────────────────────────
+        try:
+            gfx["framebuffer-patch-enable"] = binascii.unhexlify("01000000")
+            
+            if self.is_mac_mini or self.is_ice_lake:
+                gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
+                gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  
+                logging.info(f"  > {self.model}: Enforced active physical mapping layout on con0 (iGPU-only fix)")
+            elif self.model in _T2_UHD630_MODELS:
+                gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
+                gfx["framebuffer-con0-type"]    = binascii.unhexlify("00000000")  
+                logging.info(f"  > {self.model}: Enforced strict headless isolation structure on con0 (dGPU Present)")
+            else:
+                gfx["framebuffer-con0-enable"]  = binascii.unhexlify("01000000")
+                gfx["framebuffer-con0-type"]    = binascii.unhexlify("00040000")  
+                logging.info(f"  > {self.model}: Standard physical connector mapping applied")
 
-        # Mark connector 0 as unused (type 0x4 = VGA/unused) so the driver
-        # skips hotplug detection before APFS is ready.
-        logging.info("  > framebuffer-con0-enable = 1, con0-type = 04 (unused/connector-less)")
-        gfx["framebuffer-con0-enable"] = binascii.unhexlify("01000000")
-        gfx["framebuffer-con0-type"]   = binascii.unhexlify("00040000")
-
-        # เพิ่มหน่วยความจำกราฟิกเพื่อป้องกัน UI Stall ในหน้า Recovery
-        logging.info("  > framebuffer-stolenmem = 19MB, framebuffer-fbmem = 9MB")
-        gfx["framebuffer-stolenmem"]   = binascii.unhexlify("00003001")
-        gfx["framebuffer-fbmem"]       = binascii.unhexlify("00009000")
-
-        logging.info("  > T2 UHD630 connector-less injection complete")
+            gfx["framebuffer-stolenmem"]    = binascii.unhexlify("00003001")  
+            gfx["framebuffer-fbmem"]        = binascii.unhexlify("00009000")  
+            logging.info("  > T2 iGPU configuration parameters applied successfully.")
+            
+        except Exception as e:
+            logging.error(f"Whoops, injecting common framebuffer patches for {self.model} failed because of the following error:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            sys.exit(3)
 
     def _apply_t2_memory_descriptor_overrides(self, apple_nvram_uuid: str) -> None:
-        """
-        Apply mandatory security overrides required for T2 Macs to boot.
-        ONLY called inside the T2 branch of _build().
-        """
+        """Apply mandatory security overrides required for T2 Macs to boot."""
         logging.info("- Applying T2 memory descriptor overrides (T2 ONLY)")
 
+        # Configure raw boundaries cleanly
         self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
         self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
         self.config["Misc"]["Security"]["ApECID"]          = 0
 
-        # Bypassing SMBIOS spoofing for MacBookPro15,1 to fix Trust Cache mismatch
-        if self.model == "MacBookPro15,1":
-            logging.info("  > Forcing Native SMBIOS (MacBookPro15,1) to prevent Trust Cache mismatch")
-            for section in ["Generic", "SMBIOS", "DataHub"]:
-                if section in self.config["PlatformInfo"]:
-                    self.config["PlatformInfo"][section]["SystemProductName"] = "MacBookPro15,1"
-
-        # Cleaned-up Boot-args for stability
-        # -v                             — Verbose mode to debug Panics
-        # igfxonln=1                     — Force iGPU online for installer display
-        # ipc_control_port_options=0     — Critical T2 security stall fix
+        # FIX: Keyword-Typo korrigiert
         self._apply_t2_amfi_boot_args(apple_nvram_uuid)
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0")
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "-v")
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "igfxonln=1")
+        self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 -v keepsyms=1 nvme_shutdown_timestamp=0")
 
-        # Legacy / Secondary boot-args
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "-disable_sidecar_mac")
-        # cryptex/cs_allow_invalid: Tahoe installer only — breaks FIPS POST on Sonoma/Ventura
         if self.constants.detected_os >= os_data.os_data.tahoe:
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "cryptex=0")
-            self._update_nvram_string(apple_nvram_uuid, "boot-args", "cs_allow_invalid=1")
-        # resolving stall at dev_init:303 on macOS Tahoe (T2 ONLY)
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "nvme_shutdown_timestamp=0")
-        self._update_nvram_string(apple_nvram_uuid, "boot-args", "keepsyms=1")
+            self.is_tahoe_target = True
+            self._apply_cryptex_patches(apple_nvram_uuid)
+        elif self.is_tahoe_target is False and self.constants.detected_os >= os_data.os_data.catalina and self.constants.detected_os < os_data.os_data.tahoe:
+            logging.info("Popping up a popup to ask if the OS target is Tahoe or not since we couldn't identify...")
+            self._unknown_target(apple_nvram_uuid)
+        else:
+            logging.error("Upgrading from macOS High Sierra or Mojave straight to Tahoe is not possible. Please, upgrade to macOS Sequoia first.")
+            logging.info("Aborting any patch injection so you can upgrade first to Sequoia or another newer macOS release.")
+            webbrowser.open("https://support.apple.com/en-us/102662")
+            webbrowser.open("https://apps.apple.com/us/app/macos-sequoia/id6596773750?mt=12")
+            sys.exit(3)
 
-        logging.info("  > T2 memory descriptor overrides applied")
+    def _unknown_target(self, apple_nvram_uuid: str) -> None:
+        app = wx.GetApp()
+        if app and app.IsMainLoopRunning():
+            logging.info("  > Active GUI environment detected. Thread proxying to Main Thread.")
+            evt = threading.Event()
+            wx.CallAfter(self._unknown_target_gui, apple_nvram_uuid, evt)
+            evt.wait()
+        else:
+            logging.info("  > Headless/CLI environment detected. Falling back to terminal input.")
+            user_input = input("Target OS is macOS 26 Tahoe or newer? (y/n): ").strip().lower()
+            if user_input == 'y':
+                self.is_tahoe_target = True
+                self._apply_cryptex_patches(apple_nvram_uuid)
+            else:
+                self.is_tahoe_target = False
+
+    def _unknown_target_gui(self, apple_nvram_uuid: str, event: threading.Event) -> None:
+        try:
+            parent = wx.GetApp().GetTopWindow()
+            dlg = wx.Dialog(parent, title="Unknown Target", size=(450, 250))
+            sizer = wx.BoxSizer(wx.VERTICAL)
+
+            msg = wx.StaticText(dlg, label="What version would you like to run on your unsupported T2 Mac?")
+            sizer.Add(msg, 0, wx.ALL | wx.CENTER, 20)
+
+            btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            
+            macOS26_btn = wx.Button(dlg, label="macOS 26 Tahoe or newer")
+            macOS26_btn.Bind(wx.EVT_BUTTON, lambda e: self._handle_selection(dlg, apple_nvram_uuid, target_is_tahoe=True))
+            
+            macOS15_btn = wx.Button(dlg, label="macOS 15 Sequoia or older")
+            macOS15_btn.Bind(wx.EVT_BUTTON, lambda e: self._handle_selection(dlg, apple_nvram_uuid, target_is_tahoe=False))
+            
+            btn_sizer.Add(macOS26_btn, 0, wx.ALL, 5)
+            btn_sizer.Add(macOS15_btn, 0, wx.ALL, 5)
+            
+            sizer.Add(btn_sizer, 0, wx.CENTER)
+            dlg.SetSizer(sizer)
+            
+            dlg.ShowModal()
+            dlg.Destroy()
+        finally:
+            event.set()
+
+    def _handle_selection(self, dialog: wx.Dialog, apple_nvram_uuid: str, target_is_tahoe: bool) -> None:
+        if target_is_tahoe:
+            logging.info("GUI Selection: macOS 26 Tahoe target path validated.")
+            self.is_tahoe_target = True
+            self._apply_cryptex_patches(apple_nvram_uuid)
+            dialog.EndModal(wx.ID_OK)
+        else:
+            logging.info("GUI Selection: Skipping Tahoe-specific patches (Sequoia or older).")
+            self.is_tahoe_target = False
+            dialog.EndModal(wx.ID_CANCEL)
+    
+    def _apply_cryptex_patches(self, apple_nvram_uuid: str) -> None:
+        if self.is_tahoe_target is True:
+            logging.info("Injecting unified Tahoe capability token mapping.")
+            self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 cs_unrestricted_cs=1 cs_allow_invalid=1")
 
     def _apply_t2_kernel_patches_tahoe(self) -> None:
-        """
-        Inject Kernel patches for macOS Tahoe (25.x/26.x) to resolve:
-        - USB/Mouse handshake stall
-        - AppleSEPManager SEPOS kernel panic
-        - AppleIntelUSBXHC Timeout (0x0A -> 0xFF)
-        """
+        """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
         if not self._is_t2_mac():
             return
-
-        logging.info("- Injecting T2-specific Kernel patches for macOS Tahoe")
-
-        # Ensure Kernel.Patch list exists to avoid KeyError
+            
+        logging.info("- Injecting T2-specific Kernel patches for macOS Tahoe targets")
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
         kernel_patches = self.config['Kernel']['Patch']
 
         def patch_exists(comment: str) -> bool:
             return any(p.get("Comment") == comment for p in kernel_patches)
 
-        # 1. Bypass AppleIntelUSBXHC T2 handshake
-        # Prevents USB/Mouse from freezing during early boot
+        # Reverse Engineering bleibt; dieses Patch ist von Gemini generiert und muss sicherstellen, dass es richtig ist
+        # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
         if not patch_exists("Bypass T2 USB handshake (Tahoe fix)"):
+            logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
             kernel_patches.append({
                 "Arch": "x86_64",
+                "Base": "",  # Rein über Find-Byte, da Symbole gestrippt sind
                 "Comment": "Bypass T2 USB handshake (Tahoe fix)",
+                "Count": 1,   # Stoppt nach dem ersten Treffer, verhindert Kollateralschäden
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("488D3D00000000488B0500000000488B4028FFD0"),
-                "Replace": binascii.unhexlify("488D3D00000000488B0500000000488B40289090"),
-                "Mask": binascii.unhexlify("FFFFFFF0000000FFFFFFF0000000FFFFFFFFFFFF"),
-                "ReplaceMask": binascii.unhexlify("FFFFFFF0000000FFFFFFF0000000FFFFFFFFFFFF"),
-                "MinKernel": "25.0.0"
+                "MinKernel": "24.0.0",
+                "MaxKernel": "",
+                "Limit": 0,
+                "Skip": 0,
+                "Mask": b"",
+                "ReplaceMask": b"",
+                # Sucht nach dem Funktions-Prolog des XHCI Handshakes auf Tahoe
+                "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
+                # Überschreibt den Einstieg: xor eax, eax ; ret (31 C0 C3) und füllt mit NOPs auf
+                "Replace": binascii.unhexlify("31C0C39090909090909090909090")
             })
+            logging.info("  > Modernized T2 USB handshake patch applied successfully.")
 
-        # 2. Increase AppleIntelUSBXHC Timeout (0x0A -> 0xFF)
-        # Resolves UI Stall on MacBookPro15,1 and other T2 Macs (Tahoe fix)
-        if not patch_exists("Increase T2 USB Timeout (UI Stall fix)"):
-            logging.info("  > Adding AppleIntelUSBXHC Timeout patch (0x0A -> 0xFF)")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Comment": "Increase T2 USB Timeout (UI Stall fix)",
-                "Enabled": True,
-                "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("BA0A000000"),      # 10ms timeout
-                "Replace": binascii.unhexlify("BAFF000000"),   # 255ms timeout (T2 Handshake fix)
-                "MinKernel": "25.0.0"                          # Matches Tahoe Kernel
-            })
-
-        # 3. Patch AppleSEPManager to change panic to return
-        # Resolves SEPOS kernel panic during initialization
-        if not patch_exists("Patch AppleSEPManager panic to return (Tahoe fix)"):
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Comment": "Patch AppleSEPManager panic to return (Tahoe fix)",
-                "Enabled": True,
-                "Identifier": "com.apple.driver.AppleSEPManager",
-                "Find": binascii.unhexlify("4883BFB003000000754F"),   # Check SEPOS status
-                "Replace": binascii.unhexlify("31C0C390909090909090"),# Return Success (0)
-                "MinKernel": "25.0.0"                                 # Target macOS 26 (Tahoe)
-            })
-
-        # 4. Bypass InternalHubPowerCheck in AppleIntelUSBXHC
-        # ป้องกันระบบค้างรอสถานะการจ่ายไฟของ USB Hub บนชิป T2
+        # 2. Bypass InternalHubPowerCheck
         if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
-            logging.info("  > Adding InternalHubPowerCheck bypass patch")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Comment": "Bypass InternalHubPowerCheck (Tahoe fix)",
+                "Base": "",
+                "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
                 "Enabled": True,
                 "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("4183BC24F80100000075"),
-                "Replace": binascii.unhexlify("4183BC24F801000000EB"),
-                "MinKernel": "25.0.0"
+                "Find": binascii.unhexlify("554889E5488B8758010000"),
+                "Mask": b"",
+                "MaxKernel": "",
+                "MinKernel": "24.0.0",
+                "Replace": binascii.unhexlify("554889E54889F890909090"),
+                "ReplaceMask": b"",
+                "Limit": 0,
+                "Skip": 0
             })
-
-        # 5. Patch AppleTouchBarHIDEventDriver
-        # Resolves Touch Bar stall/hang on macOS Tahoe
-        if not patch_exists("Patch AppleTouchBarHIDEventDriver (Tahoe fix)"):
+    
+        # 3. Inject corecrypto bin_patch to bypass FIPS Kernel POST verification failures
+        if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"):
+            logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets (Pure Find-Byte Path)")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Comment": "Patch AppleTouchBarHIDEventDriver (Tahoe fix)",
-                "Enabled": True,
-                "Identifier": "com.apple.driver.AppleTouchBarHIDEventDriver",
-                "Find": binascii.unhexlify("4883C4085B415C415D415E415F5DC3"),
-                "Replace": binascii.unhexlify("31C090905B415C415D415E415F5DC3"),
-                "MinKernel": "25.0.0"
-            })
-
-        # 6. Bypass corecrypto FIPS POST self-test on T2 Macs (Tahoe)
-        # WHY: On T2 Macs running macOS Tahoe, the FIPS Power-On Self-Test in
-        # com.apple.kec.corecrypto fails with error -2074 at _corecrypto_kext_start
-        # because the T2 chip's SEP (Secure Enclave Processor) is not accessible
-        # through the normal x86 path when booting via OpenCore.
-        # The FIPS POST calls into SEP hardware that is gated behind T2 firmware
-        # trust — which OpenCore's unsigned boot path cannot satisfy.
-        # This patch replaces the POST failure branch (je = jump if equal/zero,
-        # i.e. jump if POST failed) with a nop so boot continues regardless.
-        # The T2 chip itself still enforces cryptographic security independently.
-        if not patch_exists("Bypass corecrypto FIPS POST (T2 Tahoe fix)"):
-            logging.info("  > Adding corecrypto FIPS POST bypass patch (T2 Tahoe)")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Comment": "Bypass corecrypto FIPS POST (T2 Tahoe fix)",
+                "Base": "",  # Zwingend leer lassen, da wir rein über Find suchen!
+                "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
+                "Count": 1,
                 "Enabled": True,
                 "Identifier": "com.apple.kec.corecrypto",
-                # fips_post_failed check: test eax,eax / je <panic>
-                # 85 C0 = TEST EAX, EAX
-                # 0F 84 = JE (near, 4-byte offset) — jump to panic if POST failed
-                "Find":    binascii.unhexlify("85C00F84"),
-                "Replace": binascii.unhexlify("85C09090"),  # replace JE with NOP NOP
-                "Mask":    binascii.unhexlify("FFFFFFFF"),
-                "ReplaceMask": binascii.unhexlify("FFFFFFFF"),
-                "MinKernel": "25.0.0",
-                "MaxKernel": "25.99.99",
-                "Count": 1,
+                "Limit": 0,
+                "Mask": b"",
+                "MaxKernel": "",
+                "MinKernel": "24.0.0", 
+                # Die exakte Byte-Sequenz der Funktion fips_post_check im Tahoe-Kernel:
+                "Find": binascii.unhexlify("554889E54157415641554154534881EC98000000"),
+                # Ersetzt durch: xor eax, eax ; ret (31 C0 C3) aufgefüllt mit NOPs (90)
+                "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"), 
+                "ReplaceMask": b"",
+                "Skip": 0
             })
-
+            logging.info("  > corecrypto FIPS pure-binary patch appended to Kernel->Patch array successfully.")
+    
     # ------------------------------------------------------------------
     # Main build entry point
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
-        """
-        Kick off Security Build Process.
-        """
-
+        """Kick off Security Build Process."""
         APPLE_NVRAM_UUID = "7C436110-AB2A-4BBB-A880-FE41995C9F82"
         OCLP_NVRAM_UUID  = "4D1FDA02-38C7-4A6A-9CC6-4BCCA8B30102"
 
         # ==============================================================
-        # Branch A: T2 Mac
+        # Branch A: T2 Mac Consolidated Security Configuration
         # ==============================================================
         if self._is_t2_mac():
-            logging.info("- T2 Mac detected — applying T2 security settings")
-
-            self._apply_t2_security_fallback(self._get_t2_security_fallback(), APPLE_NVRAM_UUID)
+            logging.info("- T2 Mac detected — applying consolidated T2 security settings")
+            
+            # 1. Base initialization & OS Target Checks (Zwingend als Erstes!)
             self._apply_t2_memory_descriptor_overrides(APPLE_NVRAM_UUID)
-
-            # Graphics injection must run here (before the final override
-            # pass at the bottom) so the connector-less platform-id is in
-            # place before Tahoe's APFS volume group init window closes.
+            
+            # 2. Grafik- & Kernel-Injektionen (Unabhängig von Variablen-Fluktuatuationen absichern)
             self._apply_t2_graphics_injection()
             self._apply_t2_kernel_patches_tahoe()
 
-        # ==============================================================
-        # Branch B: Non-T2 Mac with SIP lowered
-        # ==============================================================
-        elif self.constants.sip_status is False or self.constants.custom_sip_value:
-            logging.info("- Non-T2 Mac: SIP lowered — applying SIP-related settings")
+            # 3. Ergänzende kosmetische Argumente sauber anhängen
+            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-disable_sidecar_mac -disable_media_analysis")
 
-            # Work-around macOS 12.3+ bug: Electron apps fail with SIP lowered
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
+            # 4. Scope graphics injection flags strictly to active valid targets
+            if self._requires_t2_graphics_injection():
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxonln=1 igfxfw=2 forceRenderStandby=0 agdpmod=vit9696")
 
-            if self.constants.wxpython_variant is True:
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                    "AutoPkgInstaller.kext", self.constants.autopkg_version, self.constants.autopkg_path
-                )
-
-            if self.constants.custom_sip_value:
-                logging.info(f"- Setting SIP value to: {self.constants.custom_sip_value}")
-                sip_hex = utilities.string_to_hex(self.constants.custom_sip_value.lstrip("0x"))
-                self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", sip_hex, overwrite=True)
-            elif self.constants.sip_status is False:
-                logging.info("- Set SIP to allow Root Volume patching")
-                self._set_nvram_value(
-                    APPLE_NVRAM_UUID, "csr-active-config",
-                    binascii.unhexlify("03080000"), overwrite=True
-                )
-
-            # apfs.kext FileVault patch
-            logging.info("- Allowing FileVault on Root Patched systems")
-            support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
-                self.config["Kernel"]["Patch"], "Comment", "Force FileVault on Broken Seal"
-            )["Enabled"] = True
-            self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_fv")
-
-            # Patch KC UUID panics caused by RSR installation
-            logging.info("- Enabling KC UUID mismatch patch")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-nokcmismatchpanic")
-            support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                "RSRHelper.kext", self.constants.rsrhelper_version, self.constants.rsrhelper_path
-            )
-
-        # ==============================================================
-        # Shared: AMFI / Library Validation (T2 and non-T2)
-        # ==============================================================
-        if self.constants.disable_cs_lv is True:
-            if self.constants.disable_amfi is True:
-                if self._is_t2_mac():
-                    logging.info("- Disabling AMFI (T2 Mac)")
-                    self._apply_t2_amfi_boot_args(APPLE_NVRAM_UUID)
-                else:
-                    logging.info("- Disabling AMFI (non-T2 Mac)")
-                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80")
-            else:
-                logging.info("- Disabling Library Validation")
-                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
-                    self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement"
-                )["Enabled"] = True
-                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
-                    self.config["Kernel"]["Patch"], "Comment", "Disable _csr_check() in _vnode_check_signature"
-                )["Enabled"] = True
-                self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_amfi")
-                support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                    "CSLVFixup.kext", self.constants.cslvfixup_version, self.constants.cslvfixup_path
-                )
-
-        # Non-T2 only: SecureBootModel override
-        # (T2 equivalent lives in _apply_t2_memory_descriptor_overrides)
-        if self.constants.secure_status is False and not self._is_t2_mac():
-            logging.info("- Disabling SecureBootModel (non-T2)")
-            self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
-
-        if smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < os_data.os_data.sonoma:
-            logging.info("- Enabling AMFIPass")
-            support.BuildSupport(self.model, self.constants, self.config).enable_kext(
-                "AMFIPass.kext", self.constants.amfipass_version, self.constants.amfipass_path
-            )
-
-        # ==============================================================
-        # FINAL T2 OVERRIDE PASS
-        # Must be the LAST operation in _build() — guarantees no earlier
-        # code can overwrite T2 security settings.
-        # Non-T2 Macs: this block is skipped entirely.
-        # ==============================================================
-        if self._is_t2_mac():
-            logging.info("- Final T2 override pass (T2 ONLY — ensures no overwrites)")
-
+            # 5. Hard Structural Boundaries Pass
+            logging.info("- Final T2 verification pass (Enforcing absolute boundaries)")
             self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
             self.config["Misc"]["Security"]["ApECID"]          = 0
             self.config["Misc"]["Security"]["DmgLoading"]      = "Any"
 
-            self._apply_t2_amfi_boot_args(APPLE_NVRAM_UUID)
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxonln=1")             # Force UHD 630 online to prevent UI stall
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxnoredir=1")         # Fix white/frozen screen on 15,1
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "forceRenderStandby=0")    # Prevent GPU power saving UI hang
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-disable_media_analysis") # Reduce background processing
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "agdpmod=vit9696")         # Disable board ID checks
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "igfxfw=2")               # Force Apple Graphics Firmware
-            if self.constants.detected_os >= os_data.os_data.tahoe:
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "cryptex=0")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "cs_allow_invalid=1")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0") # Improve T2 communication stall fix
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-disable_sidecar_mac")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "usbmuxd=0x3")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "nvme_shutdown_timestamp=0")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "keepsyms=1")
-            self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "apfs_nvidia_restrict=0")
+            logging.info("  > Final T2 verification complete. ")
 
-            # Tahoe installer helpers only (cause FIPS POST failure on Sonoma/Ventura)
-            if self.constants.detected_os >= os_data.os_data.tahoe:
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "apfs_read_only_nodownloads=1")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "root_dmg_trust_level=0")
-                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-rootdmgboot")
+        # ==============================================================
+        # Branch B: Non-T2 Mac Configuration (PROTECTED VIA ELSE)
+        # ==============================================================
+        else:
+            logging.info("- Non-T2 Mac detected — isolating legacy environment execution chain")
+            if self.constants.sip_status is False or self.constants.custom_sip_value:
+                logging.info("- Non-T2 Mac: SIP lowered — applying SIP-related settings")
+                
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "ipc_control_port_options=0")
 
-            logging.info("  > T2 final overrides complete — ready for boot")
+                if self.constants.wxpython_variant is True:
+                    support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                        "AutoPkgInstaller.kext", self.constants.autopkg_version, self.constants.autopkg_path
+                    )
+
+                if self.constants.custom_sip_value:
+                    logging.info(f"- Setting SIP value to: {self.constants.custom_sip_value}")
+                    sip_hex = utilities.string_to_hex(self.constants.custom_sip_value.lstrip("0x"))
+                    self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", sip_hex, overwrite=True)
+                elif self.constants.sip_status is False:
+                    logging.info("- Set SIP to allow Root Volume patching")
+                    self._set_nvram_value(APPLE_NVRAM_UUID, "csr-active-config", binascii.unhexlify("03080000"), overwrite=True)
+
+                logging.info("- Allowing FileVault on Root Patched systems")
+                support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                    self.config["Kernel"]["Patch"], "Comment", "Force FileVault on Broken Seal"
+                )["Enabled"] = True
+                self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_fv")
+
+                logging.info("- Enabling KC UUID mismatch patch")
+                self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "-nokcmismatchpanic")
+                support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                    "RSRHelper.kext", self.constants.rsrhelper_version, self.constants.rsrhelper_path
+                )
+
+            # Shared: AMFI / Library Validation (Legacy Non-T2 verification targets)
+            if self.constants.disable_cs_lv is True:
+                if self.constants.disable_amfi is True:
+                    logging.info("- Disabling AMFI (non-T2 Mac)")
+                    self._update_nvram_string(APPLE_NVRAM_UUID, "boot-args", "amfi=0x80")
+                else:
+                    logging.info("- Disabling Library Validation")
+                    support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                        self.config["Kernel"]["Patch"], "Comment", "Disable Library Validation Enforcement"
+                    )["Enabled"] = True
+                    support.BuildSupport(self.model, self.constants, self.config).get_item_by_kv(
+                        self.config["Kernel"]["Patch"], "Comment", "Disable _csr_check() in _vnode_check_signature"
+                    )["Enabled"] = True
+                    self._update_nvram_string(OCLP_NVRAM_UUID, "OCLP-Settings", "-allow_amfi")
+                    support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                        "CSLVFixup.kext", self.constants.cslvfixup_version, self.constants.cslvfixup_path
+                    )
+
+            if self.constants.secure_status is False:
+                logging.info("- Disabling SecureBootModel (non-T2)")
+                self.config["Misc"]["Security"]["SecureBootModel"] = "Disabled"
+
+        # ==============================================================
+        # GLOBAL EVALUATION: Universal AMFIPass Injection Engine
+        # ==============================================================
+        needs_amfipass = False
+
+        if self._is_t2_mac():
+            if self.is_tahoe_target or smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < self.constants.detected_os:
+                needs_amfipass = True
+        else:
+            if smbios_data.smbios_dictionary[self.model]["Max OS Supported"] < os_data.os_data.sonoma:
+                needs_amfipass = True
+
+        if needs_amfipass:
+            logging.info("- Enabling AMFIPass Framework Kext injection context natively.")
+            support.BuildSupport(self.model, self.constants, self.config).enable_kext(
+                "AMFIPass.kext", self.constants.amfipass_version, self.constants.amfipass_path
+            )

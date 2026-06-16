@@ -8,8 +8,8 @@ import shutil
 import logging
 import zipfile
 import plistlib
-import logging
 import sys
+import webbrowser
 
 from pathlib import Path
 from datetime import date
@@ -33,16 +33,27 @@ smbios,
 security,
 misc
 )
+from ..datasets import (
+    os_data
+)
 
-def rmtree_handler(func, path, exc_info) -> None:
+# von def rmtree_handler(func, path, exc_info) -> None: verabscheiden und zu def rmtree_handler(func, path, exc: BaseException) -> None: wechseln, um Kompabilität mit Python 3.13+ zu verbessern und Python 3.14-Kompabilität zu ermöglichen
+def rmtree_handler(func, path, exc: BaseException) -> None:
     try:
-        if exc_info[0] == FileNotFoundError:
+        # Python 3.13 passes the bare exception instance instead of a tuple
+        if isinstance(exc, FileNotFoundError):
             return
+            
         # If it's not a FileNotFoundError, we log the failure to the GUI
-        logging.error("Critical: rmtree_handler cannot start cleanup for path!")
-        raise 
+        logging.error(f"Critical: rmtree_handler cannot start cleanup for path: {path}")
+        logging.exception("Stack Trace:") # This prints the full technical error
+        raise exc
+        
     except Exception as e:
         logging.error(f"Function Error: {e}")
+        logging.exception("Stack Trace:") # This prints the full technical error
+        logging.info("Please try again later.")
+        sys.exit(3)
 
 class BuildOpenCore:
         
@@ -63,37 +74,31 @@ class BuildOpenCore:
             self._build_opencore()
         except Exception as e:
             logging.error(f"Function Error: {e}")
+            logging.exception("Stack Trace:") # This prints the full technical error
+            logging.info("Please try again later.")
             sys.exit(3)
 
-    def _remove_conflicting_t2_ssdt(self) -> None:
-        """
-        Removes SSDT-T2-Fake.aml if a T2 Mac is detected, to prevent conflicts
-        with newer T2-specific kernel patches and boot-args.
-        """
-        # Check if the current model is a T2 Mac by checking for the "T2_CHIP" feature.
-        # This relies on constants.device_properties being populated, which happens
-        # during the defaults generation phase.
-        is_t2_mac = self.model in model_array.T2Macs or "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", [])
-
-        if is_t2_mac:
-            ssdt_path = self.constants.acpi_path / "SSDT-T2-Fake.aml"
-            if ssdt_path.exists():
-                logging.warning(f"Conflicting SSDT-T2-Fake.aml detected for T2 Mac ({self.model}). Removing to prevent Kernel Panic.")
-                try:
-                    ssdt_path.unlink()
-                    logging.info(f"Successfully removed {ssdt_path.name}")
-                except Exception as e:
-                    logging.error(f"Failed to remove {ssdt_path.name}: {e}")
-            else:
-                logging.info(f"SSDT-T2-Fake.aml not found for T2 Mac ({self.model}), no action needed.")
-        else:
-            logging.info(f"Not a T2 Mac ({self.model}), skipping SSDT-T2-Fake.aml conflict check.")
     
     def _build_efi(self) -> None:
         """
         Build EFI folder
         """
-
+        logging.info("---OpenCore Legacy Patcher T2 by Albert Müller---")
+        try:
+            if self.constants.detected_os >= os_data.os_data.golden_gate:
+                webbrowser.open("https://www.apple.com/os/macos/")
+                logging.error("macOS 27 Golden Gate is not available for Intel Macs. Apple Silicon required. Please do not try to upgrade to Golden Gate on Intel Macs.")
+                logging.error("macOS 27 Golden Gate ist nicht für Intel Macs verfügbar, Apple Silicon ist erforderlich. Bitte nicht probieren, auf Golden Gate auf Intel Macs umzusteigen.")
+                logging.info("macOS 27 Golden Gate is compiled only for arm64, specifically for Apple Silicon.")
+                logging.info("macOS 27 Golden Gate ist nur für arm64, spezifischer für Apple Silicon kompiliert.")
+                logging.info("Please select macOS 26 Tahoe or older version.")
+                logging.info("Bitte wählen Sie macOS 26 oder ältere Version.")
+                sys.exit(1)
+            else:
+                continue
+        except Exception as e:
+            continue
+                
         utilities.cls()
         logging.info(f"Building Configuration {'for external' if self.constants.custom_model else 'on model'}: {self.model}")
 
@@ -105,54 +110,89 @@ class BuildOpenCore:
         self.config["Kernel"]["Quirks"]["DisableLinkeditJettison"] = True
 
         # Intel UHD 630 VMM Stall Fix (2018-2020 Models)
-        _T2_UHD630_MODELS = ["MacBookPro15,1", "MacBookPro15,2", "MacBookPro15,3", "MacBookPro15,4", "MacBookPro16,1", "MacBookPro16,2", "MacBookPro16,3", "MacBookPro16,4", "Macmini8,1", "iMac19,1", "iMac19,2", "iMac20,1", "iMac20,2"]
+        _T2_UHD630_MODELS = ["MacBookPro15,1", "MacBookPro15,2", "MacBookPro15,3", "MacBookPro15,4", "MacBookPro16,1", "MacBookPro16,3", "MacBookPro16,4", "Macmini8,1", "iMac20,1", "iMac20,2"]
         if self.model in _T2_UHD630_MODELS:
             logging.info(f"- Disabling VMM CPUID for {self.model} to prevent UHD 630 driver stall")
             self.constants.set_vmm_cpuid = False
 
-        if self.model in model_array.T2Macs or "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", []):
+        # Determine T2 status upfront
+        is_t2 = self.model in model_array.T2Macs or "T2_CHIP" in self.constants.device_properties.get(self.model, {}).get("Features", [])
+
+        if is_t2:
             try:
-                logging.info("- Importing t2smbiossecurity")
-                from ..efi_builder import t2smbiossecurity
-                try:
-                    logging.info("- Add Booter Quirks patches for T2 Macs ")
-                    # Updated to match function name in t2smbiossecurity.py
-                    t2smbiossecurity.finalize_t2_tahoe(self.constants.plist_path)
-                except Exception as e:
-                    logging.error("Whoops, the function finalize_t2_tahoe_internal failed to run because of the following error:")
-                    logging.exception("Stack Trace:") # This prints the full technical error
-                    logging.info("Please try again later.")
-                    sys.exit(3)
-
-                logging.info("- Adding T2-specific bypass NVRAM variables")
-            
-                # Append T2-specific boot args to the existing boot-args string
-                t2_args = " -ibtcompatbeta -amfipassbeta"
-                if "NVRAM" not in self.config:
-                    self.config["NVRAM"] = {"Add": {}}
-                    if "7C436110-AB2A-4BBB-A880-FE41995C9F82" not in self.config["NVRAM"]["Add"]:
-                        self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"] = {"boot-args": ""}
-
-                # Now safely append
-                current_args = self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"].get("boot-args", "")
-                self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] = current_args + t2_args
-            
-                # Ensure DisableIoMapper is True
-                self.config["Kernel"]["Quirks"]["DisableIoMapper"] = True
+                logging.info("- Applying in-memory T2 booter and SMBIOS alignment")
+                self.config.setdefault("Booter", {}).setdefault("Quirks", {}).update({
+                    "RebuildAppleMemoryMap": False,
+                    "EnableWriteUnprotector": False,
+                    "SyncRuntimePermissions": False,
+                    "DevirtualiseMmio": False,
+                })
+                self.config.setdefault("PlatformInfo", {})["UpdateSMBIOSMode"] = "Custom"
+                self.config.setdefault("Kernel", {}).setdefault("Quirks", {})["CustomSMBIOSGuid"] = True
+                self.config.setdefault("Misc", {}).setdefault("Security", {})["SecureBootModel"] = "Disabled"
             except Exception as e:
-                logging.error("Whoops, the app failed to inject the required kexts because of the following error:")
-                logging.exception("Stack Trace:") # This prints the full technical error
+                logging.error("Whoops, applying in-memory T2 booter and SMBIOS alignments failed because of the following error:")
+                logging.exception("Stack Trace:")
                 logging.info("Please try again later.")
                 sys.exit(3)
 
-        # macOS Sequoia/Tahoe support for Lilu plugins
-        # NOTE: -lilubetaall causes corecrypto FIPS POST panic on T2 Macs (Tahoe/macOS 26)
-        # because it forces Lilu injection into com.apple.kec.corecrypto.
-        # Use -liluforce instead, which only injects into kexts that Lilu plugins explicitly target.
-        lilu_arg = "-liluforce" if self.model in model_array.T2Macs else "-lilubetaall"
-        current_boot_args = self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"]
-        if lilu_arg not in current_boot_args:
-            self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] += f" {lilu_arg}"
+                logging.info("- Adding T2-specific bypass NVRAM variables")
+                
+                if "NVRAM" not in self.config:
+                    self.config["NVRAM"] = {"Add": {}, "Delete": {}}
+                if "Delete" not in self.config["NVRAM"]:
+                    self.config["NVRAM"]["Delete"] = {}
+
+                if "7C436110-AB2A-4BBB-A880-FE41995C9F82" not in self.config["NVRAM"]["Add"]:
+                    self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"] = {"boot-args": ""}
+
+                # Ensure we strictly clean out legacy variables from NVRAM to prevent corecrypto mismatch
+                if "7C436110-AB2A-4BBB-A880-FE41995C9F82" not in self.config["NVRAM"]["Delete"]:
+                    self.config["NVRAM"]["Delete"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"] = []
+                
+                for target_arg in ["boot-args", "csr-active-config", "amfi-allow-arguments"]:
+                    if target_arg not in self.config["NVRAM"]["Delete"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]:
+                        self.config["NVRAM"]["Delete"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"].append(target_arg)
+
+                # Fetch template boot-args, scrub any accidental Lilu flags inherited from template plists
+                raw_args = self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"].get("boot-args", "")
+                scrubbed_args = " ".join([arg for arg in raw_args.split() if not arg.startswith("-lilu")])
+                
+                # Append required T2 args safely without compounding spaces
+                t2_args = "-ibtcompatbeta -amfipassbeta"
+                self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] = f"{scrubbed_args} {t2_args}".strip()
+                
+                # Ensure WriteFlash is enabled to commit changes to SPI ROM
+                self.config["NVRAM"]["WriteFlash"] = True
+                
+                # Force DisableIoMapper for stability
+                self.config["Kernel"]["Quirks"]["DisableIoMapper"] = True
+
+            except Exception as e:
+                logging.error("Whoops, the app failed to inject the required kexts because of the following error:")
+                logging.exception("Stack Trace:")
+                logging.info("Please try again later.")
+                sys.exit(3)
+        else:
+            # For Non-T2 Legacy Hardware
+            if "NVRAM" not in self.config:
+                self.config["NVRAM"] = {"Add": {}}
+            if "7C436110-AB2A-4BBB-A880-FE41995C9F82" not in self.config["NVRAM"]["Add"]:
+                self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"] = {"boot-args": ""}
+                
+            current_boot_args = self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"]
+            
+            # Target 2017 iMac models specifically to bypass vt-d/broadcom complications
+            _IMAC_2017_MODELS = ["iMac18,1", "iMac18,2", "iMac18,3"]
+            if self.model in _IMAC_2017_MODELS:
+                if "dart=0" not in current_boot_args:
+                    logging.info(f"- Appending dart=0 boot argument for 2017 iMac hardware target to fix WiFi/Bluetooth issues on macOS Tahoe ({self.model})")
+                    current_boot_args = f"{current_boot_args} dart=0".strip()
+
+            if "-lilubetaall" not in current_boot_args:
+                current_boot_args = f"{current_boot_args} -lilubetaall".strip()
+                
+            self.config["NVRAM"]["Add"]["7C436110-AB2A-4BBB-A880-FE41995C9F82"]["boot-args"] = current_boot_args
 
         # Call support functions
         for function in [
@@ -169,73 +209,21 @@ class BuildOpenCore:
             function(self.model, self.constants, self.config)
 
         # Work-around ocvalidate
+        # Auch behebt einen Fehler, indem Windows 10/11 per Boot Camp-Installation verschwindet wegen zu viele Malen \EFI\Microsoft\Boot\bootmgfw.efi erstellt werden oder das \EFI\Microsoft\Boot\bootmgfw.efi erstellen in config.plist, auch wenn es schon da steht.
         if self.constants.validate is False:
             logging.info("- Adding bootmgfw.efi BlessOverride")
+            
+            # Ensure the section exists
             if "BlessOverride" not in self.config["Misc"]:
                 self.config["Misc"]["BlessOverride"] = []
-                self.config["Misc"]["BlessOverride"].append("\\EFI\\Microsoft\\Boot\\bootmgfw.efi")
+                
+            # FIX: Only append if it's not already there
+            target_path = "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"
+            if target_path not in self.config["Misc"]["BlessOverride"]:
+                self.config["Misc"]["BlessOverride"].append(target_path)    
+
     
     
-    def _mount_efi_partition(self) -> bool:
-        """
-        Locate and mount the internal EFI partition if not already mounted.
-        Uses 'diskutil info' to check mount status before attempting to mount.
-        Requires sudo — runs via osascript to request privilege elevation on macOS.
-        Returns True if EFI is mounted (or was already mounted), False on failure.
-        """
-        import subprocess
-
-        try:
-            # Find all EFI partitions from diskutil list
-            result = subprocess.check_output(["diskutil", "list"], text=True)
-            efi_devices = []
-            for line in result.splitlines():
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                parts = stripped.split()
-                # diskutil list format: index  type  name  size  identifier
-                # EFI lines look like: "1:  EFI EFI  209.7 MB  disk0s1"
-                # The device identifier is always the last token
-                if "EFI" in parts and len(parts) >= 2:
-                    dev = parts[-1]
-                    if dev.startswith("disk"):
-                        efi_devices.append(dev)
-
-            if not efi_devices:
-                logging.warning("- No EFI partition found via diskutil list")
-                return False
-
-            for dev in efi_devices:
-                # Check if already mounted
-                info = subprocess.check_output(["diskutil", "info", dev], text=True)
-                if "Mounted:                   Yes" in info:
-                    logging.info(f"- EFI partition {dev} is already mounted")
-                    return True
-
-                # Not mounted — try with sudo via osascript (shows macOS auth dialog)
-                logging.info(f"- Mounting EFI partition {dev} (requires administrator password)")
-                mount_cmd = f"diskutil mount {dev}"
-                osascript_cmd = [
-                    "osascript", "-e",
-                    f'do shell script "{mount_cmd}" with administrator privileges'
-                ]
-                try:
-                    subprocess.run(osascript_cmd, check=True, capture_output=True)
-                    logging.info(f"- Successfully mounted {dev}")
-                    return True
-                except subprocess.CalledProcessError as e:
-                    logging.warning(f"- Failed to mount {dev}: {e}")
-                    continue
-
-            logging.warning("- Could not mount any EFI partition")
-            return False
-
-        except Exception as e:
-            logging.error("- EFI partition mount failed unexpectedly")
-            logging.exception(e)
-            return False
-
     def _generate_base(self) -> None:
         """
         Generate OpenCore base folder and config
@@ -252,12 +240,10 @@ class BuildOpenCore:
             Path(self.constants.opencore_zip_copied).unlink()
         if Path(self.constants.opencore_release_folder).exists():
             logging.info("Deleting old copy of OpenCore folder")
-            shutil.rmtree(self.constants.opencore_release_folder, onerror=rmtree_handler, ignore_errors=True)
+            shutil.rmtree(self.constants.opencore_release_folder, onexc=rmtree_handler)
 
-        # Best-effort EFI mount before writing any files
-        if not self._mount_efi_partition():
-            logging.info("- Continuing without mounted EFI (may require manual mount later)")
-
+        logging.info("")
+        logging.info(f"- Adding OpenCore v{self.constants.opencore_version} {'DEBUG' if self.constants.opencore_debug is True else 'RELEASE'}")
         shutil.copy(self.constants.opencore_zip_source, self.constants.build_path)
         zipfile.ZipFile(self.constants.opencore_zip_copied).extractall(self.constants.build_path)
 
@@ -265,21 +251,44 @@ class BuildOpenCore:
         logging.info("- Adding config.plist for OpenCore")
         shutil.copy(self.constants.plist_template, self.constants.oc_folder)
         self.config = plistlib.load(Path(self.constants.plist_path).open("rb"))
-    
+
     def _save_config(self) -> None:
         """
-        Save config.plist to disk
+        Save config.plist to disk with structural validation to prevent
+        plistlib type errors.
         """
+        
+        def find_bad_key(obj, path="root"):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if not isinstance(k, str):
+                        # This log entry will pinpoint exactly where the corruption is
+                        logging.error(f"!!! NON-STRING KEY FOUND !!!")
+                        logging.error(f"    Location: {path}")
+                        logging.error(f"    Offending Key: {k} (Type: {type(k)})")
+                    find_bad_key(v, f"{path}/{k}")
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    find_bad_key(item, f"{path}[{i}]")
+
+        # Run the diagnostic scan before attempting to save
+        find_bad_key(self.config)
+
+        # Proceed to save
         try:
-            plistlib.dump(
-                self.config,
-                Path(self.constants.plist_path).open("wb"),
-                sort_keys=True,
-        )
+            # Ensure the directory exists
+            Path(self.constants.plist_path).parent.mkdir(parents=True, exist_ok=True)
+            
+            with Path(self.constants.plist_path).open("wb") as f:
+                plistlib.dump(self.config, f, sort_keys=True)
+            logging.info("Successfully saved config.plist")
+            
         except Exception as e:
             logging.error(f"Function Error while saving config: {e}")
-            sys.exit(3)
-
+            logging.exception("Stack Trace:")
+            # Use sys.exit if you want to stop the build on failure
+            sys.exit(3)    
+    
     def _set_revision(self) -> None:
         """
         Set revision information in config.plist
@@ -293,7 +302,10 @@ class BuildOpenCore:
             rev["Build-Type"] = "OpenCore Built on Target Machine"
             computer_copy = copy.copy(self.constants.computer)
             computer_copy.ioregistry = None
-            rev["Hardware-Probe"] = pickle.dumps(computer_copy)
+            
+            # FIX: Convert the binary pickle dump to a string representation 
+            # so plistlib doesn't try to parse it as an active data structure.
+            rev["Hardware-Probe"] = str(pickle.dumps(computer_copy))
         else:
             rev["Build-Type"] = "OpenCore Built for External Machine"
     
@@ -313,6 +325,7 @@ class BuildOpenCore:
         # Validate type to avoid malicious plist poisoning
         if not isinstance(guid, dict):
             logging.error(f"NVRAM GUID {guid_key} is not a dictionary — refusing to write metadata")
+            logging.exception("Stack Trace:") 
             return
     
         # --- Safe writes ---
