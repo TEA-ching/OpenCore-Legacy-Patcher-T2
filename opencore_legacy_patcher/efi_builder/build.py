@@ -94,10 +94,15 @@ class BuildOpenCore:
                 logging.info("Please select macOS 26 Tahoe or older version.")
                 logging.info("Bitte wählen Sie macOS 26 oder ältere Version.")
                 sys.exit(1)
+            else:
+                logging.info("You're not targeting macOS 27 Golden Gate, this is good.")
+                logging.info("Sie haben nicht macOS 27 Golden Gate ausgewählt, das ist gut.")
+                pass
         except Exception as e:
             logging.error("We couldn't make sure if you are targeting macOS 27 Golden Gate or newer. Skip checking...")
             logging.error("Wir könnten nicht feststellen, ob Sie macOS 27 Golden Gate installieren möchten oder nicht. Das wird übersprungen")
             logging.exception("Stack Trace:")
+            pass
                 
         utilities.cls()
         logging.info(f"Building Configuration {'for external' if self.constants.custom_model else 'on model'}: {self.model}")
