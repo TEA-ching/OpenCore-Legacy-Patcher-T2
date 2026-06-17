@@ -98,7 +98,6 @@ class BuildOpenCore:
             logging.error("We couldn't make sure if you are targeting macOS 27 Golden Gate or newer. Skip checking...")
             logging.error("Wir könnten nicht feststellen, ob Sie macOS 27 Golden Gate installieren möchten oder nicht. Das wird übersprungen")
             logging.exception("Stack Trace:")
-            continue
                 
         utilities.cls()
         logging.info(f"Building Configuration {'for external' if self.constants.custom_model else 'on model'}: {self.model}")
