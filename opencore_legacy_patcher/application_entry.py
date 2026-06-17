@@ -7,8 +7,6 @@ import sys
 import time
 import logging
 import threading
-import sys
-import logging
 
 from pathlib import Path
 
