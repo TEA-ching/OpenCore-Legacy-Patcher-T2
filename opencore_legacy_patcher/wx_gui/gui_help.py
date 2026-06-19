@@ -58,7 +58,7 @@ class HelpFrame(wx.Frame):
         # Define external target items using structured tuples instead of a dict mapping loop
         # Pulls from constants.py configuration bindings cleanly
         resource_links = [
-            ("View official GitHub repository", getattr(self.constants, "github_issues_link", "https://www.google.com/search?q=opencore+legacy+patcher+t2&oq=opencore+legacy+patcher+t2&gs_lcrp=EgZjaHJvbWUqBggAEEUYOzIGCAAQRRg7MggIARBFGCcYOzIJCAIQABgTGIAEMgoIAxAAGBMYFhgeMgcIBBAAGO8FMgYIBRBFGEEyBggGEEUYPDIGCAcQRRg80gEINDQwM2owajeoAgCwAgA&sourceid=chrome&ie=UTF-8#:~:text=OpenCore%20Legacy%20Patcher%20for,H%C3%A4ufig%20besucht")),
+            ("View official GitHub repository", getattr(self.constants, "github_official_link", "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/")),
             ("View official GitHub Issues", getattr(self.constants, "github_issues_link", "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/issues")),
             ("Join official GitHub Discussions", getattr(self.constants, "github_discussions_link", "https://github.com/albert-mueller/OpenCore-Legacy-Patcher-T2/discussions")),
         ]
