@@ -551,12 +551,12 @@ class BuildMiscellaneous:
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
         kernel_patches = self.config['Kernel']['Patch']
 
-        # 2. Disable xART validation capacity loop checks safely (Pure Find-Byte Path)
+        # 2. Disable xART validation capacity loop checks safely (Symbolic Base Path)
         if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
-            logging.info("  > Injecting AppleSEPManager text segment check bypass via direct bytes")
+            logging.info("  > Injecting AppleSEPManager XARTDisableLog bypass via Symbol Base")
             kernel_patches.append({
                 "Arch": "x86_64",
-                "Base": "",  # Symbol entkoppelt
+                "Base": "__ZN14XARTDisableLog16register_disableEj", # Robuster Ankerpunkt
                 "Comment": "Bypass XARTDisableLog limits (Tahoe Cache Fix)",
                 "Count": 1,
                 "Enabled": True,
@@ -564,8 +564,8 @@ class BuildMiscellaneous:
                 "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                "Find": binascii.unhexlify("48895C241048896C24154889742420574883EC30"),
-                "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"),  # xor eax, eax ; ret + NOPs
+                "Find": binascii.unhexlify("554889E5"),        # push rbp; mov rbp, rsp (Exakt 4 Bytes)
+                "Replace": binascii.unhexlify("31C0C390"),     # xor eax, eax; ret; nop (Exakt 4 Bytes)
                 "ReplaceMask": b"",
                 "Limit": 0,
                 "Skip": 0
@@ -576,21 +576,21 @@ class BuildMiscellaneous:
             logging.info("  > Injecting verified AppleSEPDeviceService OOL payload bypass")
             kernel_patches.append({
                 "Arch": "x86_64",
-                # Der exakte, gemangelte Name der IOKit-Dienst-Funktion:
                 "Base": "__ZN21AppleSEPDeviceService23get_max_ool_send_pagesEv",
                 "Comment": "Hardcode SEP OOL Max Send Pages Limit",
                 "Count": 1,
                 "Enabled": True,
                 "Identifier": "com.apple.driver.AppleSEPManager",
-                "Limit": 0,
-                "Mask": b"",
                 "MaxKernel": "",
                 "MinKernel": "24.0.0",
-                # Standard-Funktionsprolog (push rbp; mov rbp, rsp):
-                "Find": binascii.unhexlify("554889E5"),
-                # Überschreibt den Einstieg: mov eax, 0x40 ; ret (Setzt das Limit hart auf 64 Seiten)
+                # Wir machen Find 6 Bytes lang, indem wir zwei Null-Bytes anhängen
+                "Find": binascii.unhexlify("554889E50000"),
+                # Die Mask sagt: Die ersten 4 Bytes (FFFFFFFF) MÜSSEN matchen, die letzten 2 (0000) sind egal
+                "Mask": binascii.unhexlify("FFFFFFFF0000"),
+                # Replace ist exakt 6 Bytes lang: mov eax, 0x40 ; ret
                 "Replace": binascii.unhexlify("B840000000C3"), 
                 "ReplaceMask": b"",
+                "Limit": 0,
                 "Skip": 0
             })
 
