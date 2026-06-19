@@ -359,81 +359,8 @@ class BuildSecurity:
             self._update_nvram_string(apple_nvram_uuid, "boot-args", "ipc_control_port_options=0 cs_unrestricted_cs=1 cs_allow_invalid=1")
 
     def _apply_t2_kernel_patches_tahoe(self) -> None:
-        """Inject Kernel patches for macOS Tahoe to fix stalls and corecrypto failures."""
-        if not self._is_t2_mac():
-            return
-            
-        logging.info("- Injecting T2-specific Kernel patches for macOS Tahoe targets")
-        self.config.setdefault('Kernel', {}).setdefault('Patch', [])
-        kernel_patches = self.config['Kernel']['Patch']
-
-        def patch_exists(comment: str) -> bool:
-            return any(p.get("Comment") == comment for p in kernel_patches)
-
-        # Reverse Engineering bleibt; dieses Patch ist von Gemini generiert und muss sicherstellen, dass es richtig ist
-        # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
-        if not patch_exists("Bypass T2 USB handshake (Tahoe fix)"):
-            logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",  # Rein über Find-Byte, da Symbole gestrippt sind
-                "Comment": "Bypass T2 USB handshake (Tahoe fix)",
-                "Count": 1,   # Stoppt nach dem ersten Treffer, verhindert Kollateralschäden
-                "Enabled": True,
-                "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "MinKernel": "24.0.0",
-                "MaxKernel": "",
-                "Limit": 0,
-                "Skip": 0,
-                "Mask": b"",
-                "ReplaceMask": b"",
-                # Sucht nach dem Funktions-Prolog des XHCI Handshakes auf Tahoe
-                "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
-                # Überschreibt den Einstieg: xor eax, eax ; ret (31 C0 C3) und füllt mit NOPs auf
-                "Replace": binascii.unhexlify("31C0C39090909090909090909090")
-            })
-            logging.info("  > Modernized T2 USB handshake patch applied successfully.")
-
-        # 2. Bypass InternalHubPowerCheck
-        if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",
-                "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
-                "Enabled": True,
-                "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("554889E5488B8758010000"),
-                "Mask": b"",
-                "MaxKernel": "",
-                "MinKernel": "24.0.0",
-                "Replace": binascii.unhexlify("554889E54889F890909090"),
-                "ReplaceMask": b"",
-                "Limit": 0,
-                "Skip": 0
-            })
-    
-        # 3. Inject corecrypto bin_patch to bypass FIPS Kernel POST verification failures
-        if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"):
-            logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets (Pure Find-Byte Path)")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",  # Zwingend leer lassen, da wir rein über Find suchen!
-                "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
-                "Count": 1,
-                "Enabled": True,
-                "Identifier": "com.apple.kec.corecrypto",
-                "Limit": 0,
-                "Mask": b"",
-                "MaxKernel": "",
-                "MinKernel": "24.0.0", 
-                # Die exakte Byte-Sequenz der Funktion fips_post_check im Tahoe-Kernel:
-                "Find": binascii.unhexlify("554889E54157415641554154534881EC98000000"),
-                # Ersetzt durch: xor eax, eax ; ret (31 C0 C3) aufgefüllt mit NOPs (90)
-                "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"), 
-                "ReplaceMask": b"",
-                "Skip": 0
-            })
-            logging.info("  > corecrypto FIPS pure-binary patch appended to Kernel->Patch array successfully.")
+        logging.info("The use of the function _apply_t2_kernel_patches_tahoe is retired. This function remains there to ensure compatability so the app doesn't crash.")
+        logging.info("Die Funktion _apply_t2_kernel_patches_tahoe ist eingestellt. Diese Funktion nur bleibt für Kompabilität, um sicherzustellen, dass die App nicht abstürzt.")
     
     # ------------------------------------------------------------------
     # Main build entry point
