@@ -551,68 +551,114 @@ class BuildMiscellaneous:
         self.config.setdefault('Kernel', {}).setdefault('Patch', [])
         kernel_patches = self.config['Kernel']['Patch']
 
-        # 2. Disable xART validation capacity loop checks safely (Symbolic Base Path)
-        if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
-            logging.info("  > Injecting AppleSEPManager XARTDisableLog bypass via Symbol Base")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "__ZN14XARTDisableLog16register_disableEj", # Robuster Ankerpunkt
-                "Comment": "Bypass XARTDisableLog limits (Tahoe Cache Fix)",
-                "Count": 1,
-                "Enabled": True,
-                "Identifier": "com.apple.driver.AppleSEPManager",
-                "Mask": b"",
-                "MaxKernel": "",
-                "MinKernel": "24.0.0",
-                "Find": binascii.unhexlify("554889E5"),        # push rbp; mov rbp, rsp (Exakt 4 Bytes)
-                "Replace": binascii.unhexlify("31C0C390"),     # xor eax, eax; ret; nop (Exakt 4 Bytes)
-                "ReplaceMask": b"",
-                "Limit": 0,
-                "Skip": 0
-            })
+        try:
+            # 2. Disable xART validation capacity loop checks safely (Symbolic Base Path)
+            if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
+                logging.info("  > Injecting AppleSEPManager XARTDisableLog bypass via Symbol Base")
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Base": "__ZN14XARTDisableLog16register_disableEj",
+                    "Comment": "Bypass XARTDisableLog limits (Tahoe Cache Fix)",
+                    "Count": 1,
+                    "Enabled": True,
+                    "Identifier": "com.apple.driver.AppleSEPManager",
+                    "Mask": b"",
+                    "MaxKernel": "",
+                    "MinKernel": "24.0.0",
+                    "Find": binascii.unhexlify("554889E5"),        # push rbp; mov rbp, rsp
+                    "Replace": binascii.unhexlify("31C0C390"),     # xor eax, eax; ret; nop
+                    "ReplaceMask": b"",
+                    "Limit": 0,
+                    "Skip": 0
+                })
+    
+            # 3. Force AppleSEPDeviceService OOL constraints (Tahoe Fix)
+            if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
+                logging.info("  > Injecting verified AppleSEPDeviceService OOL payload bypass")
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Base": "__ZN21AppleSEPDeviceService23get_max_ool_send_pagesEv",
+                    "Comment": "Hardcode SEP OOL Max Send Pages Limit",
+                    "Count": 1,
+                    "Enabled": True,
+                    "Identifier": "com.apple.driver.AppleSEPManager",
+                    "MaxKernel": "",
+                    "MinKernel": "24.0.0",
+                    "Find": binascii.unhexlify("554889E50000"),    # 6 Bytes
+                    "Mask": binascii.unhexlify("FFFFFFFF0000"),    # Wildcard für die letzten 2 Bytes
+                    "Replace": binascii.unhexlify("B840000000C3"), # mov eax, 0x40 ; ret (6 Bytes)
+                    "ReplaceMask": b"",
+                    "Limit": 0,
+                    "Skip": 0
+                })
+    
+            # 4. Corrected AppleKeyStoreUserClient operational state bypass (Pure Find-Byte Path)
+            if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)" for p in kernel_patches):
+                logging.info("  > Injecting stabilized AppleKeyStore internal branch byte-patch")
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Base": "",  # C++ Mangled Name entfernt
+                    "Comment": "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)",
+                    "Count": 1,
+                    "Enabled": True,
+                    "Identifier": "com.apple.driver.AppleKeyStore",
+                    "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
+                    "Mask": b"",
+                    "Replace": binascii.unhexlify("31C0C39090909090909090909090"),  # xor eax, eax ; ret + NOPs
+                    "ReplaceMask": b"",
+                    "MinKernel": "24.0.0",
+                    "MaxKernel": "",
+                    "Limit": 0,
+                    "Skip": 0
+                })
 
-        # 3. Force AppleSEPDeviceService OOL constraints (Tahoe Fix) - REPARIERT
-        if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
-            logging.info("  > Injecting verified AppleSEPDeviceService OOL payload bypass")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "__ZN21AppleSEPDeviceService23get_max_ool_send_pagesEv",
-                "Comment": "Hardcode SEP OOL Max Send Pages Limit",
-                "Count": 1,
-                "Enabled": True,
-                "Identifier": "com.apple.driver.AppleSEPManager",
-                "MaxKernel": "",
-                "MinKernel": "24.0.0",
-                # Wir machen Find 6 Bytes lang, indem wir zwei Null-Bytes anhängen
-                "Find": binascii.unhexlify("554889E50000"),
-                # Die Mask sagt: Die ersten 4 Bytes (FFFFFFFF) MÜSSEN matchen, die letzten 2 (0000) sind egal
-                "Mask": binascii.unhexlify("FFFFFFFF0000"),
-                # Replace ist exakt 6 Bytes lang: mov eax, 0x40 ; ret
-                "Replace": binascii.unhexlify("B840000000C3"), 
-                "ReplaceMask": b"",
-                "Limit": 0,
-                "Skip": 0
-            })
+            # Reverse Engineering bleibt; dieses Patch ist von Gemini generiert und muss sicherstellen, dass es richtig ist
+            # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
+            if not patch_exists("Bypass T2 USB handshake (Tahoe fix)"):
+                logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Base": "",  # Rein über Find-Byte, da Symbole gestrippt sind
+                    "Comment": "Bypass T2 USB handshake (Tahoe fix)",
+                    "Count": 1,   # Stoppt nach dem ersten Treffer, verhindert Kollateralschäden
+                    "Enabled": True,
+                    "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
+                    "MinKernel": "24.0.0",
+                    "MaxKernel": "",
+                    "Limit": 0,
+                    "Skip": 0,
+                    "Mask": b"",
+                    "ReplaceMask": b"",
+                    # Sucht nach dem Funktions-Prolog des XHCI Handshakes auf Tahoe
+                    "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
+                    # Überschreibt den Einstieg: xor eax, eax ; ret (31 C0 C3) und füllt mit NOPs auf
+                    "Replace": binascii.unhexlify("31C0C39090909090909090909090")
+                })
+                logging.info("  > Modernized T2 USB handshake patch applied successfully.")
+    
+            # 2. Bypass InternalHubPowerCheck
+            if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Base": "",
+                    "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
+                    "Enabled": True,
+                    "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
+                    "Find": binascii.unhexlify("554889E5488B8758010000"),
+                    "Mask": b"",
+                    "MaxKernel": "",
+                    "MinKernel": "24.0.0",
+                    "Replace": binascii.unhexlify("554889E54889F890909090"),
+                    "ReplaceMask": b"",
+                    "Limit": 0,
+                    "Skip": 0
+                })
+        except Exception as e:
+            logging.error("Failed to inject critical patches for your T2 Mac due to the following error:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            sys.exit(3)
 
-        # 4. Corrected AppleKeyStoreUserClient operational state bypass (Pure Find-Byte Path)
-        if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)" for p in kernel_patches):
-            logging.info("  > Injecting stabilized AppleKeyStore internal branch byte-patch")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",  # C++ Mangled Name entfernt
-                "Comment": "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)",
-                "Count": 1,
-                "Enabled": True,
-                "Identifier": "com.apple.driver.AppleKeyStore",
-                "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
-                "Mask": b"",
-                "Replace": binascii.unhexlify("31C0C39090909090909090909090"),  # xor eax, eax ; ret + NOPs
-                "ReplaceMask": b"",
-                "MinKernel": "24.0.0",
-                "MaxKernel": "",
-                "Limit": 0,
-                "Skip": 0
-            })
             
         # Bypass osinstallersetupd bridge device validation checks (Fixes Attestation Error -10000)
         try:
@@ -625,75 +671,29 @@ class BuildMiscellaneous:
             logging.info("Please try again later.")
             sys.exit(3)
         
-        # Reverse Engineering bleibt; dieses Patch ist von Gemini generiert und muss sicherstellen, dass es richtig ist
-        # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
-        if not patch_exists("Bypass T2 USB handshake (Tahoe fix)"):
-            logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",  # Rein über Find-Byte, da Symbole gestrippt sind
-                "Comment": "Bypass T2 USB handshake (Tahoe fix)",
-                "Count": 1,   # Stoppt nach dem ersten Treffer, verhindert Kollateralschäden
-                "Enabled": True,
-                "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "MinKernel": "24.0.0",
-                "MaxKernel": "",
-                "Limit": 0,
-                "Skip": 0,
-                "Mask": b"",
-                "ReplaceMask": b"",
-                # Sucht nach dem Funktions-Prolog des XHCI Handshakes auf Tahoe
-                "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
-                # Überschreibt den Einstieg: xor eax, eax ; ret (31 C0 C3) und füllt mit NOPs auf
-                "Replace": binascii.unhexlify("31C0C39090909090909090909090")
-            })
-            logging.info("  > Modernized T2 USB handshake patch applied successfully.")
-
-        # 2. Bypass InternalHubPowerCheck
-        if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",
-                "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
-                "Enabled": True,
-                "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                "Find": binascii.unhexlify("554889E5488B8758010000"),
-                "Mask": b"",
-                "MaxKernel": "",
-                "MinKernel": "24.0.0",
-                "Replace": binascii.unhexlify("554889E54889F890909090"),
-                "ReplaceMask": b"",
-                "Limit": 0,
-                "Skip": 0
-            })
-    
-        # 3. Inject corecrypto bin_patch to bypass FIPS Kernel POST verification failures
-        if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"):
-            logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets (Pure Find-Byte Path)")
-            kernel_patches.append({
-                "Arch": "x86_64",
-                "Base": "",  # Zwingend leer lassen, da wir rein über Find suchen!
-                "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
-                "Count": 1,
-                "Enabled": True,
-                "Identifier": "com.apple.kec.corecrypto",
-                "Limit": 0,
-                "Mask": b"",
-                "MaxKernel": "",
-                "MinKernel": "24.0.0", 
-                # Die exakte Byte-Sequenz der Funktion fips_post_check im Tahoe-Kernel:
-                "Find": binascii.unhexlify("554889E54157415641554154534881EC98000000"),
-                # Ersetzt durch: xor eax, eax ; ret (31 C0 C3) aufgefüllt mit NOPs (90)
-                "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"), 
-                "ReplaceMask": b"",
-                "Skip": 0
-            })
-            logging.info("  > corecrypto FIPS pure-binary patch appended to Kernel->Patch array successfully.")
-
         if enable_experimental_patches==True: #soll normalerweise dieser Funktion niemals True rückgeben, ohne dass der Benutzer selbst ins Code eingreift
             # Gemini-generierten Patches, überprüfung und testen erforderlich:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
             # Seien Sie momentan mit dieser Patch vorsichtig bevor sie es aktivieren
-            # Force AppleAPFSContainerScheme priority override to eliminate formatting race conditions
-            logging.info("No optional patches available at this time.")
-            logging.info("Zur dieser Zeit es gibt keine optionale Patches.")
+            # 3. Inject corecrypto bin_patch to bypass FIPS Kernel POST verification failures
+            if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"):
+                logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets (Pure Find-Byte Path)")
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Base": "",  # Zwingend leer lassen, da wir rein über Find suchen!
+                    "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
+                    "Count": 1,
+                    "Enabled": True,
+                    "Identifier": "com.apple.kec.corecrypto",
+                    "Limit": 0,
+                    "Mask": b"",
+                    "MaxKernel": "",
+                    "MinKernel": "24.0.0", 
+                    # Die exakte Byte-Sequenz der Funktion fips_post_check im Tahoe-Kernel:
+                    "Find": binascii.unhexlify("554889E54157415641554154534881EC98000000"),
+                    # Ersetzt durch: xor eax, eax ; ret (31 C0 C3) aufgefüllt mit NOPs (90)
+                    "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"), 
+                    "ReplaceMask": b"",
+                    "Skip": 0
+                })
+                logging.info("  > corecrypto FIPS pure-binary patch appended to Kernel->Patch array successfully.")
