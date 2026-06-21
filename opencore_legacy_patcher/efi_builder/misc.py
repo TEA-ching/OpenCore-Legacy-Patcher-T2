@@ -673,11 +673,54 @@ class BuildMiscellaneous:
             sys.exit(3)
         
         if enable_experimental_patches==True: #soll normalerweise dieser Funktion niemals True rückgeben, ohne dass der Benutzer selbst ins Code eingreift
-            # Gemini-generierten Patches, überprüfung und testen erforderlich:
+            # Gemini-und-NotebookLLM-generierten Patches, überprüfung und testen erforderlich:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
             # Seien Sie momentan mit dieser Patch vorsichtig bevor sie es aktivieren
             # 3. Inject corecrypto bin_patch to bypass FIPS Kernel POST verification failures
-            if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"):
+            # Patch-Konfiguration für AppleUSBVHCI auf macOS Tahoe (Kernel 24.x)
+            # Ziel: Verhindern von Panics bei T2-Kommunikationsfehlern
+            if not patch_exists("Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics"): # von NotebookLLM-generierten Patch
+                logging.info("Enabling AppleUSBVHCI patches for T2 Tahoe stability")
+                kernel_patches.append([
+                    {
+                        "Arch": "x86_64",
+                        "Comment": "Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics",
+                        "Enabled": True,
+                        "Identifier": "com.apple.driver.usb.AppleUSBVHCI",
+                        "Base": "",  # Find-Byte Pfad, da Symbole oft variieren
+                        "Count": 1,
+                        "MinKernel": "24.0.0",
+                        "MaxKernel": "",
+                        "Mask": b"",
+                        "ReplaceMask": b"",
+                        "Limit": 0,
+                        "Skip": 0,
+                        # Exakter Funktionsbeginn von processInterrupts [1]:
+                        # PUSH RBP; MOV RBP,RSP; PUSH R15; PUSH R14; PUSH R13; PUSH R12; PUSH RBX; SUB RSP,0x28
+                        "Find": binascii.unhexlify("554889E54157415641554154534883EC28"),
+                        # Sofortiger RET (C3), Rest mit NOPs (90) auffüllen
+                        "Replace": binascii.unhexlify("C390909090909090909090909090909090")
+                    },
+                    {
+                        "Arch": "x86_64",
+                        "Comment": "Bypass AppleUSBVHCI::hardwareException (Suppress firmware exceptions)",
+                        "Enabled": True,
+                        "Identifier": "com.apple.driver.usb.AppleUSBVHCI",
+                        "Base": "",
+                        "Count": 1,
+                        "MinKernel": "24.0.0",
+                        "MaxKernel": "",
+                        "Mask": b"",
+                        "ReplaceMask": b"",
+                        "Limit": 0,
+                        "Skip": 0,
+                        # Funktionsbeginn hardwareException [2]: 
+                        "Find": binascii.unhexlify("554889E5488B87A80300000FB6B7D0000000"),
+                        "Replace": binascii.unhexlify("C390909090909090909090909090909090")
+                    }
+                ])
+            
+            if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"): # von Gemini generierten Patch
                 logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets (Pure Find-Byte Path)")
                 kernel_patches.append({
                     "Arch": "x86_64",
