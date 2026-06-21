@@ -446,6 +446,7 @@ class BuildMiscellaneous:
             except Exception as e:
                 logging.info(f"- {self.model}: Great news! We tried disabling USB-Map.kext and USB-Map-Tahoe.kext but we didn't find them.")
                 logging.info("You don't have to worry about this message.")
+            # Der Grund warum MinKernel auf 24.0.0 (Sequoias Version von Darwin) stattdessen von 25.x.x eingestellt ist, ist es die Installationsprogramm läuft auf Darwin 24 noch, auch die von 26 Tahoe.
             try:
                 logging.info("Enabling AppleUSBHostPort patches (Pure Find-Byte Path)")
                 self.config["Kernel"]["Patch"].extend([
@@ -616,48 +617,27 @@ class BuildMiscellaneous:
                     "Skip": 0
                 })
 
-            # Reverse Engineering bleibt; dieses Patch ist von Gemini generiert und muss sicherstellen, dass es richtig ist
-            # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
-            if not any(p.get("Comment") == "Bypass T2 USB handshake (Tahoe fix)" for p in kernel_patches):
-                logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
-                kernel_patches.append({
-                    "Arch": "x86_64",
-                    "Base": "",  # Rein über Find-Byte, da Symbole gestrippt sind
-                    "Comment": "Bypass T2 USB handshake (Tahoe fix)",
-                    "Count": 1,   # Stoppt nach dem ersten Treffer, verhindert Kollateralschäden
-                    "Enabled": True,
-                    "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                    "MinKernel": "24.0.0",
-                    "MaxKernel": "",
-                    "Limit": 0,
-                    "Skip": 0,
-                    "Mask": b"",
-                    "ReplaceMask": b"",
-                    # Sucht nach dem Funktions-Prolog des XHCI Handshakes auf Tahoe
-                    "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
-                    # Überschreibt den Einstieg: xor eax, eax ; ret (31 C0 C3) und füllt mit NOPs auf
-                    "Replace": binascii.unhexlify("31C0C39090909090909090909090")
-                })
-                logging.info("  > Modernized T2 USB handshake patch applied successfully.")
-    
-            # 2. Bypass InternalHubPowerCheck
-            if not any(p.get("Comment") == "Bypass InternalHubPowerCheck (Tahoe fix)" for p in kernel_patches):
-                logging.info("- Injecting Bypass InternalHubPowerCheck via getUpstreamHub patches")
-                kernel_patches.append({
-                    "Arch": "x86_64",
-                    "Base": "",
-                    "Comment": "Bypass InternalHubPowerCheck via getUpstreamHub (Tahoe fix)",
-                    "Enabled": True,
-                    "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                    "Find": binascii.unhexlify("554889E5488B8758010000"),
-                    "Mask": b"",
-                    "MaxKernel": "",
-                    "MinKernel": "24.0.0",
-                    "Replace": binascii.unhexlify("554889E54889F890909090"),
-                    "ReplaceMask": b"",
-                    "Limit": 0,
-                    "Skip": 0
-                })
+                # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
+                # Dieser Patch ist sicher, da er nur den Funktions-Einstieg neutralisiert.
+                if not any(p.get("Comment") == "Bypass T2 USB handshake (Tahoe fix)" for p in kernel_patches):
+                    logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
+                    kernel_patches.append({
+                        "Arch": "x86_64",
+                        "Base": "",  # Suche über Byte-Signatur, da Symbole gestrippt sind
+                        "Comment": "Bypass T2 USB handshake (Tahoe fix)",
+                        "Count": 1,   # Verhindert Kollateralschäden durch Mehrfachtreffer
+                        "Enabled": True,
+                        "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
+                        "MinKernel": "24.0.0",
+                        "MaxKernel": "",
+                        "Limit": 0,
+                        "Skip": 0,
+                        "Mask": b"",
+                        "ReplaceMask": b"",
+                        "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
+                        "Replace": binascii.unhexlify("31C0C39090909090909090909090")
+                    })
+                    logging.info("  > Modernized T2 USB handshake patch applied successfully.")
         except Exception as e:
             logging.error("Failed to inject critical patches for your T2 Mac due to the following error:")
             logging.exception("Stack Trace:")
