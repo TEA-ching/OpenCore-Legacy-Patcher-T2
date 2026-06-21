@@ -592,19 +592,23 @@ class BuildMiscellaneous:
                     "Skip": 0
                 })
     
-            # 4. AppleKeyStoreUserClient operational state bypass (Pure Find-Byte Path)
-            if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)" for p in kernel_patches):
-                logging.info("  > Injecting AppleKeyStore internal branch byte-patch")
+            # 4. AppleKeyStoreUserClient deadline check bypass
+            if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Tahoe Fix)" for p in kernel_patches):
+                logging.info("  > Injecting AppleKeyStore Tahoe deadline check bypass")
                 kernel_patches.append({
                     "Arch": "x86_64",
-                    "Base": "",  # C++ Mangled Name entfernt
-                    "Comment": "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)",
+                    "Base": "", 
+                    "Comment": "Bypass AppleKeyStore Deadline Mismatch (Tahoe Fix)",
                     "Count": 1,
                     "Enabled": True,
                     "Identifier": "com.apple.driver.AppleKeyStore",
-                    "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
+                    # Sucht nach dem Funktionsprolog von check_lock_assert_deadline
+                    # Entspricht: push rbp; mov rbp, rsp; push r15; push r14; push rbx; push rax
+                    "Find": binascii.unhexlify("554889E5415741565350"),
                     "Mask": b"",
-                    "Replace": binascii.unhexlify("31C0C39090909090909090909090"),  # xor eax, eax ; ret + NOPs
+                    # Ersetzt durch: xor eax, eax ; ret ; nops...
+                    # Simuliert eine erfolgreiche Prüfung (kIOReturnSuccess)
+                    "Replace": binascii.unhexlify("31C0C390909090909090"),
                     "ReplaceMask": b"",
                     "MinKernel": "24.0.0",
                     "MaxKernel": "",
