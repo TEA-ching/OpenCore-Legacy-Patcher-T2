@@ -573,7 +573,7 @@ class BuildMiscellaneous:
                 })
             
             # 3. Force AppleSEPDeviceService OOL constraints (Tahoe Fix)
-            # Korrigiert: Der Symbolname in der Quelle lautet 'getSendOolMaxPages' [1], [2].
+            # Korrigiert: Der Symbolname lautet 'getSendOolMaxPages' [1], [2].
             if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
                 logging.info("- Injecting Hardcode SEP OOL Max Send Pages Limit patch")
                 kernel_patches.append({
