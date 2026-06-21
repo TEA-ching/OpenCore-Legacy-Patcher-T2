@@ -335,12 +335,18 @@ class MainFrame(wx.Frame):
             return
 
     def on_help(self, event: wx.Event = None):
-        gui_help.HelpFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        try:
+            gui_help.HelpFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        else:
+            logging.error("We failed to open up Help due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Please try again later.")
+            return
 
     def on_update(self, oclp_url: str, oclp_version: str, oclp_github_url: str):
 
