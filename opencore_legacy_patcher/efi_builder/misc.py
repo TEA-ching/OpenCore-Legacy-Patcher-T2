@@ -682,46 +682,47 @@ class BuildMiscellaneous:
             # Seien Sie momentan mit diese Patches vorsichtig bevor sie es aktivieren
             # Patch-Konfiguration für AppleUSBVHCI auf macOS Tahoe (Kernel 24.x)
             # Ziel: Verhindern von Panics bei T2-Kommunikationsfehlern
-            if not patch_exists("Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics"): # von NotebookLLM-generierten Patch
-                logging.info("Enabling AppleUSBVHCI patches for T2 Tahoe stability")
-                kernel_patches.append([
-                    {
-                        "Arch": "x86_64",
-                        "Comment": "Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics",
-                        "Enabled": True,
-                        "Identifier": "com.apple.driver.usb.AppleUSBVHCI",
-                        "Base": "",  # Find-Byte Pfad, da Symbole oft variieren
-                        "Count": 1,
-                        "MinKernel": "24.0.0",
-                        "MaxKernel": "",
-                        "Mask": b"",
-                        "ReplaceMask": b"",
-                        "Limit": 0,
-                        "Skip": 0,
-                        # Exakter Funktionsbeginn von processInterrupts [1]:
-                        # PUSH RBP; MOV RBP,RSP; PUSH R15; PUSH R14; PUSH R13; PUSH R12; PUSH RBX; SUB RSP,0x28
-                        "Find": binascii.unhexlify("554889E54157415641554154534883EC28"),
-                        # Sofortiger RET (C3), Rest mit NOPs (90) auffüllen
-                        "Replace": binascii.unhexlify("C390909090909090909090909090909090")
-                    },
-                    {
-                        "Arch": "x86_64",
-                        "Comment": "Bypass AppleUSBVHCI::hardwareException (Suppress firmware exceptions)",
-                        "Enabled": True,
-                        "Identifier": "com.apple.driver.usb.AppleUSBVHCI",
-                        "Base": "",
-                        "Count": 1,
-                        "MinKernel": "24.0.0",
-                        "MaxKernel": "",
-                        "Mask": b"",
-                        "ReplaceMask": b"",
-                        "Limit": 0,
-                        "Skip": 0,
-                        # Funktionsbeginn hardwareException [2]: 
-                        "Find": binascii.unhexlify("554889E5488B87A80300000FB6B7D0000000"),
-                        "Replace": binascii.unhexlify("C390909090909090909090909090909090")
-                    }
-                ])
+            if self.model.startswith("MacBook")
+                if not patch_exists("Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics"): # von NotebookLLM-generierten Patch
+                    logging.info("Enabling AppleUSBVHCI patches for T2 Tahoe stability")
+                    kernel_patches.append([
+                        {
+                            "Arch": "x86_64",
+                            "Comment": "Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics",
+                            "Enabled": True,
+                            "Identifier": "com.apple.driver.usb.AppleUSBVHCI",
+                            "Base": "",  # Find-Byte Pfad, da Symbole oft variieren
+                            "Count": 1,
+                            "MinKernel": "24.0.0",
+                            "MaxKernel": "",
+                            "Mask": b"",
+                            "ReplaceMask": b"",
+                            "Limit": 0,
+                            "Skip": 0,
+                            # Exakter Funktionsbeginn von processInterrupts [1]:
+                            # PUSH RBP; MOV RBP,RSP; PUSH R15; PUSH R14; PUSH R13; PUSH R12; PUSH RBX; SUB RSP,0x28
+                            "Find": binascii.unhexlify("554889E54157415641554154534883EC28"),
+                            # Sofortiger RET (C3), Rest mit NOPs (90) auffüllen
+                            "Replace": binascii.unhexlify("C390909090909090909090909090909090")
+                        },
+                        {
+                            "Arch": "x86_64",
+                            "Comment": "Bypass AppleUSBVHCI::hardwareException (Suppress firmware exceptions)",
+                            "Enabled": True,
+                            "Identifier": "com.apple.driver.usb.AppleUSBVHCI",
+                            "Base": "",
+                            "Count": 1,
+                            "MinKernel": "24.0.0",
+                            "MaxKernel": "",
+                            "Mask": b"",
+                            "ReplaceMask": b"",
+                            "Limit": 0,
+                            "Skip": 0,
+                            # Funktionsbeginn hardwareException [2]: 
+                            "Find": binascii.unhexlify("554889E5488B87A80300000FB6B7D0000000"),
+                            "Replace": binascii.unhexlify("C390909090909090909090909090909090")
+                        }
+                    ])
             
             # 3. Inject corecrypto bin_patch to silence FIPS Kernel POST verification failures - normalerweise, das ist nicht nötig, weil das nur versteckt das echte Problem, nicht zeigt.
             if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"): # von Gemini generierten Patch
