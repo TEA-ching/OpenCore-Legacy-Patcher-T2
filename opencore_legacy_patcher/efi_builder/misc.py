@@ -553,40 +553,38 @@ class BuildMiscellaneous:
 
         try:
             # 2. Disable xART validation capacity loop checks safely (Symbolic Base Path)
+            # Diese Funktion sorgt dafür, dass xART-Registrierungsfehler ignoriert werden.
             if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
-                logging.info("  > Injecting AppleSEPManager XARTDisableLog bypass via Symbol Base")
                 kernel_patches.append({
                     "Arch": "x86_64",
+                    "Identifier": "com.apple.driver.AppleSEPManager",
                     "Base": "__ZN14XARTDisableLog16register_disableEj",
                     "Comment": "Bypass XARTDisableLog limits (Tahoe Cache Fix)",
                     "Count": 1,
                     "Enabled": True,
-                    "Identifier": "com.apple.driver.AppleSEPManager",
-                    "Mask": b"",
-                    "MaxKernel": "",
                     "MinKernel": "24.0.0",
-                    "Find": binascii.unhexlify("554889E5"),        # push rbp; mov rbp, rsp
+                    "Find": binascii.unhexlify("554889E5"),        # push rbp; mov rbp, rsp [3]
                     "Replace": binascii.unhexlify("31C0C390"),     # xor eax, eax; ret; nop
+                    "Mask": b"",
                     "ReplaceMask": b"",
                     "Limit": 0,
                     "Skip": 0
                 })
-    
+            
             # 3. Force AppleSEPDeviceService OOL constraints (Tahoe Fix)
+            # Korrigiert: Der Symbolname in der Quelle lautet 'getSendOolMaxPages' [1], [2].
             if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
-                logging.info("  > Injecting verified AppleSEPDeviceService OOL payload bypass")
                 kernel_patches.append({
                     "Arch": "x86_64",
-                    "Base": "__ZN21AppleSEPDeviceService23get_max_ool_send_pagesEv",
+                    "Identifier": "com.apple.driver.AppleSEPManager",
+                    "Base": "__ZN21AppleSEPDeviceService18getSendOolMaxPagesEv", # Korrigiertes Symbol [1], [2]
                     "Comment": "Hardcode SEP OOL Max Send Pages Limit",
                     "Count": 1,
                     "Enabled": True,
-                    "Identifier": "com.apple.driver.AppleSEPManager",
-                    "MaxKernel": "",
                     "MinKernel": "24.0.0",
-                    "Find": binascii.unhexlify("554889E50000"),    # 6 Bytes
-                    "Mask": binascii.unhexlify("FFFFFFFF0000"),    # Wildcard für die letzten 2 Bytes
-                    "Replace": binascii.unhexlify("B840000000C3"), # mov eax, 0x40 ; ret (6 Bytes)
+                    "Find": binascii.unhexlify("554889E5"),        # Standard Funktions-Prolog [4]
+                    "Replace": binascii.unhexlify("B840000000C3"), # mov eax, 0x40 (64 pages); ret
+                    "Mask": b"",
                     "ReplaceMask": b"",
                     "Limit": 0,
                     "Skip": 0
