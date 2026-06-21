@@ -679,8 +679,7 @@ class BuildMiscellaneous:
         if enable_experimental_patches==True: #soll normalerweise dieser Funktion niemals True rückgeben, ohne dass der Benutzer selbst ins Code eingreift
             # Gemini-und-NotebookLLM-generierten Patches, überprüfung und testen erforderlich:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
-            # Seien Sie momentan mit dieser Patch vorsichtig bevor sie es aktivieren
-            # 3. Inject corecrypto bin_patch to bypass FIPS Kernel POST verification failures
+            # Seien Sie momentan mit diese Patches vorsichtig bevor sie es aktivieren
             # Patch-Konfiguration für AppleUSBVHCI auf macOS Tahoe (Kernel 24.x)
             # Ziel: Verhindern von Panics bei T2-Kommunikationsfehlern
             if not patch_exists("Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics"): # von NotebookLLM-generierten Patch
@@ -724,6 +723,7 @@ class BuildMiscellaneous:
                     }
                 ])
             
+            # 3. Inject corecrypto bin_patch to silence FIPS Kernel POST verification failures - normalerweise, das ist nicht nötig, weil das nur versteckt das echte Problem, nicht zeigt.
             if not patch_exists("Bypass FIPS Kernel POST Panic (-2074)"): # von Gemini generierten Patch
                 logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets (Pure Find-Byte Path)")
                 kernel_patches.append({
