@@ -682,7 +682,7 @@ class BuildMiscellaneous:
             # Seien Sie momentan mit diese Patches vorsichtig bevor sie es aktivieren
             # Patch-Konfiguration für AppleUSBVHCI auf macOS Tahoe (Kernel 24.x)
             # Ziel: Verhindern von Panics bei T2-Kommunikationsfehlern
-            if self.model.startswith("MacBook")
+            if self.model.startswith("MacBook"):
                 if not patch_exists("Bypass AppleUSBVHCI::processInterrupts to prevent protocol-driven panics"): # von NotebookLLM-generierten Patch
                     logging.info("Enabling AppleUSBVHCI patches for T2 Tahoe stability")
                     kernel_patches.append([
