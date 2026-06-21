@@ -555,6 +555,7 @@ class BuildMiscellaneous:
             # 2. Disable xART validation capacity loop checks safely (Symbolic Base Path)
             # Diese Funktion sorgt dafür, dass xART-Registrierungsfehler ignoriert werden.
             if not any(p.get("Comment") == "Bypass XARTDisableLog limits (Tahoe Cache Fix)" for p in kernel_patches):
+                logging.info("- Injecting Bypass XARTDisableLog limits patch")
                 kernel_patches.append({
                     "Arch": "x86_64",
                     "Identifier": "com.apple.driver.AppleSEPManager",
@@ -574,6 +575,7 @@ class BuildMiscellaneous:
             # 3. Force AppleSEPDeviceService OOL constraints (Tahoe Fix)
             # Korrigiert: Der Symbolname in der Quelle lautet 'getSendOolMaxPages' [1], [2].
             if not any(p.get("Comment") == "Hardcode SEP OOL Max Send Pages Limit" for p in kernel_patches):
+                logging.info("- Injecting Hardcode SEP OOL Max Send Pages Limit patch")
                 kernel_patches.append({
                     "Arch": "x86_64",
                     "Identifier": "com.apple.driver.AppleSEPManager",
@@ -590,9 +592,9 @@ class BuildMiscellaneous:
                     "Skip": 0
                 })
     
-            # 4. Corrected AppleKeyStoreUserClient operational state bypass (Pure Find-Byte Path)
+            # 4. AppleKeyStoreUserClient operational state bypass (Pure Find-Byte Path)
             if not any(p.get("Comment") == "Bypass AppleKeyStore Deadline Mismatch (Universal Fix)" for p in kernel_patches):
-                logging.info("  > Injecting stabilized AppleKeyStore internal branch byte-patch")
+                logging.info("  > Injecting AppleKeyStore internal branch byte-patch")
                 kernel_patches.append({
                     "Arch": "x86_64",
                     "Base": "",  # C++ Mangled Name entfernt
@@ -636,6 +638,7 @@ class BuildMiscellaneous:
     
             # 2. Bypass InternalHubPowerCheck
             if not patch_exists("Bypass InternalHubPowerCheck (Tahoe fix)"):
+                logging.info("- Injecting Bypass InternalHubPowerCheck via getUpstreamHub patches")
                 kernel_patches.append({
                     "Arch": "x86_64",
                     "Base": "",
