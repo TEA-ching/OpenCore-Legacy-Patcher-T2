@@ -639,7 +639,7 @@ class BuildMiscellaneous:
             sys.exit(3)
         
         if enable_experimental_patches==True: #soll normalerweise dieser Funktion niemals True rückgeben, ohne dass der Benutzer selbst ins Code eingreift
-            # Gemini-und-NotebookLLM-generierten Patches, überprüfung und testen erforderlich:
+            # NotebookLLM-generierten Patches, überprüfung und testen erforderlich:
             # bitte beachten Sie, dass dieser Patch noch nicht überprüft ist und kann Kernel Panic oder andere unerwünschte Verhalten verursachen
             # Seien Sie momentan mit diese Patches vorsichtig bevor sie es aktivieren
             # Patch-Konfiguration für AppleUSBVHCI auf macOS Tahoe (Kernel 24.x)
