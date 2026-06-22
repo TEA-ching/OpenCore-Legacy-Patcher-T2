@@ -617,27 +617,54 @@ class BuildMiscellaneous:
                     "Skip": 0
                 })
 
-                # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
-                # Dieser Patch ist sicher, da er nur den Funktions-Einstieg neutralisiert.
-                if not any(p.get("Comment") == "Bypass T2 USB handshake (Tahoe fix)" for p in kernel_patches):
-                    logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
+            # 1. Bypass AppleIntelUSBXHCI T2 handshake (Modernized for Tahoe vtable shifts)
+            # Dieser Patch ist sicher, da er nur den Funktions-Einstieg neutralisiert.
+            if not any(p.get("Comment") == "Bypass T2 USB handshake (Tahoe fix)" for p in kernel_patches):
+                logging.info("- Injecting modernized AppleUSBXHCI T2 handshake bypass (Universal Byte-Signature)")
+                kernel_patches.append({
+                    "Arch": "x86_64",
+                    "Base": "",  # Suche über Byte-Signatur, da Symbole gestrippt sind
+                    "Comment": "Bypass T2 USB handshake (Tahoe fix)",
+                    "Count": 1,   # Verhindert Kollateralschäden durch Mehrfachtreffer
+                    "Enabled": True,
+                    "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
+                    "MinKernel": "24.0.0",
+                    "MaxKernel": "",
+                    "Limit": 0,
+                    "Skip": 0,
+                    "Mask": b"",
+                    "ReplaceMask": b"",
+                    "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
+                    "Replace": binascii.unhexlify("31C0C39090909090909090909090")
+                })
+                logging.info("  > Modernized T2 USB handshake patch applied successfully.")
+                
+                if not any(p.get("Comment") == "Bypass AppleBCMWLANCore long start timeout" for p in kernel_patches):
+                    logging.info("- Injecting Bypass AppleBCMWLANCore long start timeout)")
                     kernel_patches.append({
                         "Arch": "x86_64",
-                        "Base": "",  # Suche über Byte-Signatur, da Symbole gestrippt sind
-                        "Comment": "Bypass T2 USB handshake (Tahoe fix)",
-                        "Count": 1,   # Verhindert Kollateralschäden durch Mehrfachtreffer
+                        "Comment": "Bypass AppleBCMWLANCore long start timeout",
                         "Enabled": True,
-                        "Identifier": "com.apple.driver.usb.AppleUSBXHCI",
-                        "MinKernel": "24.0.0",
+                        "Identifier": "com.apple.iokit.AppleBCMWLANCore", # Der Treiber aus deinem Log [1]
                         "MaxKernel": "",
+                        "MinKernel": "24.0.0", # sodass dieses Patch auch ladet in die Installationsprogramm von macOS 26 Tahoe
+                        # Wir suchen den Funktionsanfang von initWithAddressAndPeerManager aus der Quelle [3]:
+                        # 55          PUSH RBP
+                        # 48 89 E5    MOV RBP, RSP
+                        # 41 57       PUSH R15
+                        # 41 56       PUSH R14
+                        # 41 55       PUSH R13
+                        # 41 54       PUSH R12
+                        "Find": binascii.unhexlify("554889E54157415641554154"), 
+                        
+                        # Wir ersetzen den Start durch ein sofortiges "RET" (C3) und NOPs (90),
+                        # damit die Funktion sofort ohne Verzögerung zurückkehrt:
+                        "Replace": binascii.unhexlify("C39090909090909090909090"),
+                        
                         "Limit": 0,
                         "Skip": 0,
-                        "Mask": b"",
-                        "ReplaceMask": b"",
-                        "Find": binascii.unhexlify("554889E54156534883EC10488B05"),
-                        "Replace": binascii.unhexlify("31C0C39090909090909090909090")
+                        "Count": 1
                     })
-                    logging.info("  > Modernized T2 USB handshake patch applied successfully.")
         except Exception as e:
             logging.error("Failed to inject critical patches for your T2 Mac due to the following error:")
             logging.exception("Stack Trace:")
