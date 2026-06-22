@@ -687,33 +687,4 @@ class BuildMiscellaneous:
                         }
                     ])
                 
-                # 3. Inject corecrypto bin_patch to silence FIPS Kernel POST verification failures - normalerweise, das ist nicht nötig, weil das nur versteckt das echte Problem, nicht zeigt.
-                if not any(p.get("Comment") == "Bypass FIPS Kernel POST Panic (-2074)" for p in kernel_patches): # von Gemini generierten Patch
-                    logging.info("- Injecting corecrypto FIPS POST binary shims for Tahoe targets (Pure Find-Byte Path)")
-                    kernel_patches.append({
-                        "Arch": "x86_64",
-                        "Base": "",  # Zwingend leer lassen, da wir rein über Find suchen!
-                        "Comment": "Bypass FIPS Kernel POST Panic (-2074)",
-                        "Count": 1,
-                        "Enabled": True,
-                        "Identifier": "com.apple.kec.corecrypto",
-                        "Limit": 0,
-                        "Mask": b"",
-                        "MaxKernel": "",
-                        "MinKernel": "24.0.0", 
-                        # Die exakte Byte-Sequenz der Funktion fips_post_check im Tahoe-Kernel:
-                        "Find": binascii.unhexlify("554889E54157415641554154534881EC98000000"),
-                        # Ersetzt durch: xor eax, eax ; ret (31 C0 C3) aufgefüllt mit NOPs (90)
-                        "Replace": binascii.unhexlify("31C0C39090909090909090909090909090909090"), 
-                        "ReplaceMask": b"",
-                        "Skip": 0
-                    })
-                    logging.info("  > corecrypto FIPS pure-binary patch appended to Kernel->Patch array successfully.")
-            except Exception as e:
-                logging.error("Das Injizieren von Optionale Patches hat fehlgeschlagt wegen das folgende Fehler:")
-                logging.error("Failed to inject optional patches due to the following error:")
-                logging.exception("Stack Trace:")
-                logging.info("Bitte probieren Sie später noch einmal.")
-                logging.info("Please try again later.")
-                logging.info("Das Injizieren des Optionalen Patches währenddessen wird übersprungen.")
-                logging.info("The injection of optional patches in the meanwhile will be skipped.")
+                # corecrypto-Patches komplett entfernt - diese verstecken das echte Problem und behebt nichts
