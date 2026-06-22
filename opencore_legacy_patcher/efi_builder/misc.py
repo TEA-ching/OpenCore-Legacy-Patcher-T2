@@ -687,3 +687,8 @@ class BuildMiscellaneous:
                             "Replace": binascii.unhexlify("C390909090909090909090909090909090")
                         }
                     ])
+            except Exception as e:
+                logging.error("Injectin optional patches failed due to the following error:")
+                logging.exception("Stack Trace:")
+                logging.info("Please try again later.")
+                sys.exit(3)
