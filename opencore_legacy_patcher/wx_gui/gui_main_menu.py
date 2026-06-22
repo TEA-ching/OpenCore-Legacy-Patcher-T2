@@ -342,7 +342,7 @@ class MainFrame(wx.Frame):
                 global_constants=self.constants,
                 screen_location=self.GetPosition()
             )
-        else:
+        except Exception as e:
             logging.error("We failed to open up Help due to invalid syntax. The error is the following:")
             logging.exception("Stack Trace:")
             logging.info("Please try again later.")
