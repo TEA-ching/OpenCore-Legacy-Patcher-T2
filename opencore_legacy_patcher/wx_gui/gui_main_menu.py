@@ -108,13 +108,6 @@ class MainFrame(wx.Frame):
             },
         }
 
-        if self._host_is_macbookpro151():
-            menu_buttons["Patch Tahoe Stage-2"] = {
-                "function": self.on_patch_tahoe_stage2,
-                "description": ["Repairs staged Tahoe installer", "metadata after first restart.", "MacBookPro15,1 only."],
-                "icon": str(self.constants.icns_resource_path / "OC-Installer.icns"),
-            }
-
         button_x = 30
         button_y = model_label.GetPosition()[1] + 30
         rollover = 2
@@ -233,77 +226,6 @@ class MainFrame(wx.Frame):
 
         threading.Thread(target=self._check_for_updates).start()
 
-    def _host_is_macbookpro151(self) -> bool:
-        return (self.constants.custom_model or self.constants.computer.real_model) == "MacBookPro15,1"
-
-    def _tahoe_stage2_script_path(self) -> Path:
-        return Path(__file__).resolve().parents[2] / "docs" / "scripts" / "tahoe_stage2_asset_patch.py"
-
-    def on_patch_tahoe_stage2(self, event: wx.Event = None):
-        if not self._host_is_macbookpro151():
-            wx.MessageBox(
-                "Tahoe Stage-2 patching is currently limited to MacBookPro15,1.",
-                "Unsupported Model",
-                wx.OK | wx.ICON_WARNING
-            )
-            return
-
-        script_path = self._tahoe_stage2_script_path()
-        if not script_path.exists():
-            wx.MessageBox(
-                f"Could not find Tahoe Stage-2 patch script:\n\n{script_path}",
-                "Patch Script Missing",
-                wx.OK | wx.ICON_ERROR
-            )
-            return
-
-        warning = wx.MessageDialog(
-            self,
-            "This will scan /Volumes for staged macOS Tahoe Install Data and apply the MacBookPro15,1 Tahoe Stage-2 metadata repair.\n\n"
-            "Use this after the installer has copied files and restarted once, before booting the macOS Installer stage again.",
-            "Patch Tahoe Stage-2?",
-            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING
-        )
-        warning.ShowModal()
-        if warning.GetReturnCode() != wx.ID_YES:
-            logging.info("User cancelled Tahoe Stage-2 patch.")
-            return
-
-        logging.info("- Running Tahoe Stage-2 GUI patch")
-        threading.Thread(target=self._run_tahoe_stage2_patch, args=(script_path,), daemon=True).start()
-
-    def _run_tahoe_stage2_patch(self, script_path: Path):
-        command = [
-            sys.executable,
-            str(script_path),
-            "--diagnose-logs",
-            "--materialize-additional-manifests",
-            "--materialize-bootcache-system-volume",
-            "--patch-msu-manifest",
-            "--apply",
-        ]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        output = result.stdout.strip() or "(no output)"
-        logging.info("Tahoe Stage-2 patch exited with code %s", result.returncode)
-        logging.info(output)
-        wx.CallAfter(self._show_tahoe_stage2_result, result.returncode, output)
-
-    def _show_tahoe_stage2_result(self, returncode: int, output: str):
-        if returncode == 0:
-            wx.MessageBox(
-                f"Tahoe Stage-2 patch completed.\n\n{output}",
-                "Tahoe Stage-2 Patch Complete",
-                wx.OK | wx.ICON_INFORMATION
-            )
-            return
-
-        wx.MessageBox(
-            f"Tahoe Stage-2 patch failed.\n\n{output}",
-            "Tahoe Stage-2 Patch Failed",
-            wx.OK | wx.ICON_ERROR
-        )
-
-
     def _check_for_updates(self):
         if self.constants.has_checked_updates is True:
             return
@@ -345,49 +267,84 @@ class MainFrame(wx.Frame):
         wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"])
         
     def on_build_and_install(self, event: wx.Event = None):
-        self.Hide()
-        gui_build.BuildFrame(
-            parent=None,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
-        self.Destroy()
+        try:
+            self.Hide()
+            gui_build.BuildFrame(
+                parent=None,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+            self.Destroy()
+        except Exception as e:
+            logging.error("Es schlägt fehl, Build and Install OpenCore zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
+            logging.error("We failed to open up Build and Install OpenCore due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Bitte versuchen Sie später erneut.")
+            logging.info("Please try again later.")
 
 
     def on_post_install_root_patch(self, event: wx.Event = None):
-        gui_sys_patch_display.SysPatchDisplayFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        try:
+            gui_sys_patch_display.SysPatchDisplayFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        except Exception as e:
+            logging.error("Es schlägt fehl, Install drivers and patches zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
+            logging.error("We failed to open up Install drivers and patches due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Bitte versuchen Sie später erneut.")
+            logging.info("Please try again later.")
 
 
     def on_create_macos_installer(self, event: wx.Event = None):
-        gui_macos_installer_download.macOSInstallerDownloadFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        try:
+            gui_macos_installer_download.macOSInstallerDownloadFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        except Exception as e:
+            logging.error("Es schlägt fehl, Download macOS zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
+            logging.error("We failed to open up Download macOS due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Bitte versuchen Sie später erneut.")
+            logging.info("Please try again later.")
 
 
     def on_settings(self, event: wx.Event = None):
-        gui_settings.SettingsFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        try:
+            gui_settings.SettingsFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        except Exception as e:
+            logging.error("Es schlägt fehl, die Einstellungen zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
+            logging.error("We failed to open up Settings to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Bitte versuchen Sie später erneut.")
+            logging.info("Please try again later.")
 
     def on_help(self, event: wx.Event = None):
-        gui_help.HelpFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition()
-        )
+        try:
+            gui_help.HelpFrame(
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition()
+            )
+        except Exception as e:
+            logging.error("Es schlägt fehl, die Hilfe-Seite zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
+            logging.error("We failed to open up Help due to invalid syntax. The error is the following:")
+            logging.exception("Stack Trace:")
+            logging.info("Bitte versuchen Sie später erneut.")
+            logging.info("Please try again later.")
 
     def on_update(self, oclp_url: str, oclp_version: str, oclp_github_url: str):
 
