@@ -16,6 +16,9 @@ from pathlib import Path
 from packaging import version
 
 from .. import constants
+from . import support
+from ..support import utilities # könnte ins Futur benutzt sein
+from ..detections import device_probe # nicht sicher, ob es nötig ist oder nicht
 
 from ..support import (
     global_settings,
@@ -24,6 +27,9 @@ from ..support import (
 from ..datasets import (
     os_data,
     css_data
+    model_array,
+    smbios_data,
+    os_data
 )
 from ..wx_gui import (
     gui_build,
@@ -232,9 +238,6 @@ class MainFrame(wx.Frame):
             self.Close()
 
         threading.Thread(target=self._check_for_updates).start()
-
-    def _host_is_macbookpro151(self) -> bool:
-        return (self.constants.custom_model or self.constants.computer.real_model) == "MacBookPro15,1"
 
     def _tahoe_stage2_script_path(self) -> Path:
         return Path(__file__).resolve().parents[2] / "docs" / "scripts" / "tahoe_stage2_asset_patch.py"
