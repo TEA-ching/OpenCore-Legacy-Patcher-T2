@@ -76,6 +76,7 @@ class tui_disk_installation:
         selected_disk = supported_disks.get(disk_identifier)
         if not selected_disk:
             logging.error(f"Ausgewählte Festplatte {disk_identifier} wurde nicht gefunden.")
+            logging.error(f"The selected disk {disk_identifier} wasn't found.")
             return {}
 
         supported_partitions = {}
@@ -106,6 +107,7 @@ class tui_disk_installation:
         # FIX 1: Wenn der Mount fehlschlägt (z.B. weil Root-Rechte verweigert wurden)
         if result.returncode != 0:
             logging.error("Mount-Vorgang fehlgeschlagen! Keine ausreichenden Rechte oder Partition gesperrt.")
+            logging.error("Failed to mount the drive due to not enought rights or locked partition.")
             subprocess_wrapper.log(result)
             return False  # Gibt False zurück. Der Aufrufer (die TUI) MUSS dies abfangen!
 
@@ -126,6 +128,7 @@ class tui_disk_installation:
         # FIX 2: Absicherung, falls diskutil Erfolg meldet, der Pfad aber trotzdem nicht existiert
         if not mount_path.exists():
             logging.error("EFI konnte nicht gemountet werden! Pfad existiert nicht.")
+            logging.error("The EFI couldn't be mounted because the directory doesn't exist.")
             return False
 
         # Start der Dateioperationen
@@ -133,6 +136,7 @@ class tui_disk_installation:
             # Da wir als Root gemountet haben, löschen/kopieren wir konsequent mit run_as_root
             if (mount_path / "EFI/OC").exists():
                 logging.info("Entferne existierenden EFI/OC Ordner")
+                logging.info("Removing existing EFI/OC folder")
                 subprocess_wrapper.run_as_root(["/bin/rm", "-rf", mount_path / "EFI/OC"])
 
             if (mount_path / "System").exists():
@@ -143,16 +147,22 @@ class tui_disk_installation:
                 logging.info("Entferne existierende boot.efi")
                 subprocess_wrapper.run_as_root(["/bin/rm", mount_path / "boot.efi"])
 
-            logging.info("Kopiere OpenCore auf das EFI-Volume")
+            logging.info("Die EFI-Volume mounten")
+            logging.info("Mounting the EFI partition")
             subprocess_wrapper.run_as_root(["/bin/mkdir", "-p", mount_path / "EFI"])
+            logging.info("Kopiere OpenCore auf das EFI-Volume")
+            logging.info("Copying OpenCore to the EFI partition")
             subprocess_wrapper.run_as_root(["/bin/cp", "-r", str(self.constants.opencore_release_folder / "EFI/OC"), str(mount_path / "EFI/OC")])
             subprocess_wrapper.run_as_root(["/bin/cp", "-r", str(self.constants.opencore_release_folder / "System"), str(mount_path / "System")])
 
             if (self.constants.opencore_release_folder / "boot.efi").exists():
+                logging.info("boot.efi wird zu die EFI-Partition kopiert")
+                logging.info("Copying boot.efi to the EFI partition")
                 subprocess_wrapper.run_as_root(["/bin/cp", str(self.constants.opencore_release_folder / "boot.efi"), str(mount_path / "boot.efi")])
 
             if self.constants.boot_efi is True:
-                logging.info("Konvertiere Bootstrap zu BOOTx64.efi")
+                logging.info("Bootstrap zu BOOTx64.efi konvertieren")
+                logging.info("Converting Bootstrap to BOOTx64.efi")
                 if (mount_path / "EFI/BOOT").exists():
                     subprocess_wrapper.run_as_root(["/bin/rm", "-rf", mount_path / "EFI/BOOT"])
                 
@@ -170,27 +180,35 @@ class tui_disk_installation:
         # Volume-Icons setzen (Fehler hier kopieren wir sicherheitshalber auch als Root, da EFI geschützt ist)
         try:
             if self._determine_sd_card(sd_type) is True:
-                logging.info("Füge SD-Karten Icon hinzu")
+                logging.info("SD-Karten Icon wird hinzugefügt")
+                logging.info("Adding SD Card icon")
                 subprocess_wrapper.run_as_root(["/bin/cp", str(self.constants.icon_path_sd), str(mount_path)])
             elif ssd_type is True:
-                logging.info("Füge SSD Icon hinzu")
+                logging.info("SSD Icon wird hinzugefügt")
+                logging.info("Adding SSD icon")
                 subprocess_wrapper.run_as_root(["/bin/cp", str(self.constants.icon_path_ssd), str(mount_path)])
             elif disk_type == "USB":
-                logging.info("Füge USB-Stick Icon hinzu")
+                logging.info("USB-Stick Icon wird hinzugefügt")
+                logging.info("Adding USB stick icon")
                 subprocess_wrapper.run_as_root(["/bin/cp", str(self.constants.icon_path_external), str(mount_path)])
             else:
-                logging.info("Füge internes Festplatten Icon hinzu")
+                logging.info("internes Festplatten Icon wird hinzugefügt")
+                logging.info("Adding internal hard disk icon")
                 subprocess_wrapper.run_as_root(["/bin/cp", str(self.constants.icon_path_internal), str(mount_path)])
         except Exception as icon_error:
             logging.warning(f"Icon-Kopie fehlgeschlagen (nicht kritisch): {icon_error}")
+            logging.warning(f"Copying the icons failed (not critical): {icon_error}")
 
         # Bereinigung & Unmount
-        logging.info("Bereinige Installationsort")
+        logging.info("Installationsort wird bereinigt")
+        logging.info("Cleaning up installation site")
         if not self.constants.recovery_status:
             logging.info("Werfe EFI-Partition aus (Unmount)")
+            logging.info("Unmounting the EFI partition")
             # FIX 4: Auch unmount als Root ausführen, da wir es als Root gemountet haben
             subprocess_wrapper.run_as_root(["/usr/sbin/diskutil", "umount", mount_path])
 
         # FIX 5: Die Erfolgsmeldung wird NUR ausgegeben, wenn wir bis hierhin nicht abgebrochen haben!
         logging.info("OpenCore Transfer abgeschlossen")
+        logging.info("OpenCore Transfer completed")
         return True
