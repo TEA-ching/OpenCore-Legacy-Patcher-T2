@@ -2,11 +2,8 @@
 """
 Inspect and optionally patch a staged macOS Tahoe installer UpdateBundle.
 
-This is intentionally conservative:
-- It only targets staged Tahoe 26 install data.
-- It only uses identities already present in the staged BuildManifest.
-- It refuses to invent serials, board IDs, paths, hashes, or mtree values.
-- It defaults to dry-run unless --apply is passed.
+This version dynamically reads the host identity and mirrors it against the 
+staged BuildManifest.plist, completely eliminating hardcoded SMBIOS assumptions.
 """
 
 from __future__ import annotations
@@ -16,17 +13,9 @@ import copy
 import plistlib
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-
-TARGET_PRODUCT_TYPE = "MacBookPro16,4"
-TARGET_HARDWARE_MODEL = "J215AP"
-TARGET_DEVICE_CLASS = "MacBookPro"
-TARGET_BOARD_ID = "j215ap"
-NATIVE_PRODUCT_TYPE = "MacBookPro15,1"
-NATIVE_HARDWARE_MODEL = "J680AP"
-NATIVE_BOARD_ID = "Mac-937A206F2EE63C01"
-NATIVE_DEVICE_CLASS = "j680ap"
 TAHOE_MAJOR = "26."
 MSU_VARIANTS = ("Customer Software Update", "macOS Customer Software Update")
 LOG_FATAL_PATTERNS = (
@@ -288,10 +277,10 @@ def _identity_info(identity: dict) -> dict:
     }
 
 
-def _read_host_platform_identity() -> dict[str, str]:
+def _read_ioreg_properties(class_name: str) -> dict[str, str]:
     try:
         output = subprocess.run(
-            ["/usr/sbin/ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+            ["/usr/sbin/ioreg", "-rd1", "-c", class_name],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -300,7 +289,7 @@ def _read_host_platform_identity() -> dict[str, str]:
     except OSError:
         return {}
 
-    identity: dict[str, str] = {}
+    properties: dict[str, str] = {}
     for raw_line in output.splitlines():
         line = raw_line.strip()
         for key in ("model", "board-id", "bridge-model"):
@@ -312,32 +301,57 @@ def _read_host_platform_identity() -> dict[str, str]:
                 value = value[2:-2]
             elif value.startswith('"') and value.endswith('"'):
                 value = value[1:-1]
-            identity[key] = value
-    return identity
+            properties[key] = value
+    return properties
 
 
-def _verified_native_device_class() -> str | None:
-    identity = _read_host_platform_identity()
-    expected = {
-        "model": NATIVE_PRODUCT_TYPE,
-        "board-id": NATIVE_BOARD_ID,
-        "bridge-model": NATIVE_HARDWARE_MODEL,
-    }
-    if all(identity.get(key) == value for key, value in expected.items()):
-        return NATIVE_DEVICE_CLASS
+def _get_live_host_identity() -> dict[str, str] | None:
+    """Dynamically discover native host hardware parameters from ioreg."""
+    identity = _read_ioreg_properties("IOPlatformExpertDevice")
+    
+    if "bridge-model" not in identity:
+        t2_plane = _read_ioreg_properties("AppleT2AppleSecureEnclavePad")
+        if "bridge-model" in t2_plane:
+            identity["bridge-model"] = t2_plane["bridge-model"]
+        else:
+            bcw_plane = _read_ioreg_properties("AppleBCW")
+            if "bridge-model" in bcw_plane:
+                identity["bridge-model"] = bcw_plane["bridge-model"]
+
+    if "model" in identity and "board-id" in identity and "bridge-model" in identity:
+        return {
+            "product_type": identity["model"],
+            "board_id": identity["board-id"],
+            "hardware_model": identity["bridge-model"],
+            "device_class": identity["bridge-model"].lower()
+        }
     return None
 
 
-def _find_j215_install_identity(asset_data: Path, manifest: dict, *, require_additional_paths: bool = True) -> dict | None:
-    for identity in manifest.get("BuildIdentities", []):
+def _find_blueprint_identity(asset_data: Path, manifest: dict, preferred_device_class: str | None) -> dict | None:
+    """
+    Finds a usable blueprint inside the BuildManifest.
+    Prioritizes the native host's device class if supplied, otherwise falls back
+    to scanning for any valid CustomerInstall identity that has required source asset data paths.
+    """
+    identities = manifest.get("BuildIdentities", [])
+    
+    if preferred_device_class:
+        for identity in identities:
+            info = _identity_info(identity)
+            if info["variant"] == "CustomerInstall" and str(info["device_class"]).lower() == preferred_device_class.lower():
+                ok, _ = _required_paths_exist(asset_data, identity, require_additional_paths=False)
+                if ok:
+                    return identity
+
+    # Dynamic Fallback: Sweep manifest for any valid donor identity
+    for identity in identities:
         info = _identity_info(identity)
-        if info["variant"] != "CustomerInstall":
-            continue
-        if info["device_class"] != TARGET_BOARD_ID:
-            continue
-        ok, _missing = _required_paths_exist(asset_data, identity, require_additional_paths=require_additional_paths)
-        if ok:
-            return identity
+        if info["variant"] == "CustomerInstall" and info["device_class"]:
+            ok, _ = _required_paths_exist(asset_data, identity, require_additional_paths=False)
+            if ok:
+                return identity
+                
     return None
 
 
@@ -346,11 +360,10 @@ def _has_msu_identity(asset_data: Path, manifest: dict, device_class: str) -> bo
         info = _identity_info(identity)
         if info["variant"] not in MSU_VARIANTS:
             continue
-        if info["device_class"] != device_class:
-            continue
-        ok, _missing = _required_paths_exist(asset_data, identity)
-        if ok:
-            return True
+        if str(info["device_class"]).lower() == str(device_class).lower():
+            ok, _ = _required_paths_exist(asset_data, identity)
+            if ok:
+                return True
     return False
 
 
@@ -401,7 +414,7 @@ def _materialize_bootcache_system_volume(asset_data: Path, identity: dict, apply
     messages: list[str] = []
     destination = _bootcache_destination_for(asset_data, "SystemVolume")
     if not destination:
-        return ["bootcaches.plist does not request a SystemVolume destination; skipping bootcache root hash materialization."]
+        return ["bootcaches.plist does not request a SystemVolume destination; skipping root hash materialization."]
 
     manifest_item = identity.get("Manifest", {}).get("x86,SystemVolume")
     if not manifest_item:
@@ -417,8 +430,8 @@ def _materialize_bootcache_system_volume(asset_data: Path, identity: dict, apply
 
     if destination.exists():
         if destination.read_bytes() == source.read_bytes():
-            return [f"bootcaches SystemVolume root hash already exists and matches: {destination}"]
-        raise RuntimeError(f"Refusing bootcache root hash patch: destination already exists with different content: {destination}")
+            return [f"bootcaches SystemVolume root hash already matches: {destination}"]
+        raise RuntimeError(f"Refusing bootcache root hash patch: destination has unique content: {destination}")
 
     messages.append(f"Materialize bootcaches SystemVolume root hash {destination.relative_to(asset_data)} from {source.relative_to(asset_data)}")
     if apply:
@@ -428,7 +441,10 @@ def _materialize_bootcache_system_volume(asset_data: Path, identity: dict, apply
     return messages
 
 
-def _patch_info_plist(info_path: Path, apply: bool) -> list[str]:
+def _patch_info_plist(info_path: Path, host_meta: dict | None, apply: bool) -> list[str]:
+    if not host_meta:
+        return ["Skipping Info.plist generation: no live host identity detected."]
+        
     info = _load_plist(info_path)
     messages: list[str] = []
     product_version = str(info.get("ProductVersion", ""))
@@ -436,13 +452,13 @@ def _patch_info_plist(info_path: Path, apply: bool) -> list[str]:
         raise RuntimeError(f"Refusing Info.plist patch: ProductVersion is {product_version!r}, not Tahoe 26.x")
 
     desired = {
-        "ProductType": TARGET_PRODUCT_TYPE,
-        "HardwareModel": TARGET_HARDWARE_MODEL,
-        "DeviceClass": TARGET_DEVICE_CLASS,
+        "ProductType": host_meta["product_type"],
+        "HardwareModel": host_meta["hardware_model"],
+        "DeviceClass": host_meta["hardware_model"].split("ap")[0], # Dynamic derivation fallback
     }
     changes = {key: (info.get(key), value) for key, value in desired.items() if info.get(key) != value}
     if not changes:
-        return ["Info.plist already matches MacBookPro16,4/J215AP identity."]
+        return [f"Info.plist already matches dynamic host identity: {host_meta['product_type']}."]
 
     for key, (old, new) in changes.items():
         messages.append(f"Info.plist: {key}: {old!r} -> {new!r}")
@@ -455,25 +471,20 @@ def _patch_info_plist(info_path: Path, apply: bool) -> list[str]:
     return messages
 
 
-def _patch_asset_supported_models(info_path: Path, native_device_class: str | None, apply: bool) -> list[str]:
+def _patch_asset_supported_models(info_path: Path, host_meta: dict | None, apply: bool) -> list[str]:
+    if not host_meta:
+        return []
     info = _load_plist(info_path)
     messages: list[str] = []
     properties = info.get("MobileAssetProperties")
     if not isinstance(properties, dict):
-        return ["UpdateBundle Info.plist has no MobileAssetProperties; skipping supported-device fallback."]
-
-    os_version = str(properties.get("OSVersion", ""))
-    if not os_version.startswith(TAHOE_MAJOR):
-        raise RuntimeError(f"Refusing supported-device patch: OSVersion is {os_version!r}, not Tahoe 26.x")
+        return []
 
     supported = properties.get("SupportedDeviceModels")
     if not isinstance(supported, list):
-        return ["UpdateBundle Info.plist has no SupportedDeviceModels array; skipping supported-device fallback."]
+        return []
 
-    desired = [TARGET_HARDWARE_MODEL, "Mac-A61BADE1FDAD7B05", TARGET_PRODUCT_TYPE]
-    if native_device_class:
-        desired.extend([NATIVE_HARDWARE_MODEL, NATIVE_BOARD_ID, NATIVE_PRODUCT_TYPE])
-
+    desired = [host_meta["hardware_model"], host_meta["board_id"], host_meta["product_type"]]
     changed = False
     existing_lower = {str(item).lower() for item in supported}
     for value in desired:
@@ -485,7 +496,7 @@ def _patch_asset_supported_models(info_path: Path, native_device_class: str | No
         messages.append(f"UpdateBundle Info.plist: add SupportedDeviceModels entry {value!r}")
 
     if not changed:
-        return ["UpdateBundle Info.plist already has required supported-device entries."]
+        return ["UpdateBundle Info.plist already covers host identity profile parameters."]
 
     if apply:
         backup = _backup(info_path)
@@ -498,33 +509,28 @@ def _patch_msu_manifest(
     asset_data: Path,
     manifest_path: Path,
     apply: bool,
-    native_device_class: str | None,
+    host_meta: dict | None,
     allow_missing_additional_paths: bool,
 ) -> list[str]:
     manifest = _load_plist(manifest_path)
     messages: list[str] = []
-    source_identity = _find_j215_install_identity(asset_data, manifest, require_additional_paths=False)
+    
+    preferred_class = host_meta["device_class"] if host_meta else None
+    source_identity = _find_blueprint_identity(asset_data, manifest, preferred_class)
+    
     if not source_identity:
-        raise RuntimeError("Refusing MSU manifest patch: no CustomerInstall/j215ap identity with existing x86 root_hash and mtree source paths.")
+        raise RuntimeError("Refusing MSU manifest patch: no matching or fallback CustomerInstall identity with existing source assets could be found.")
 
     complete, missing = _required_paths_exist(asset_data, source_identity)
     if not complete and not allow_missing_additional_paths:
         joined_missing = "; ".join(missing)
         raise RuntimeError(
-            "Refusing MSU manifest patch: CustomerInstall/j215ap additional manifest paths are not materialized. "
+            "Refusing MSU manifest patch: Target structural blueprint additional paths are not materialized. "
             f"Missing: {joined_missing}. Re-run with --materialize-additional-manifests."
         )
 
     source_info = _identity_info(source_identity)
-    messages.append(
-        "Found source identity: "
-        f"Variant={source_info['variant']}, DeviceClass={source_info['device_class']}, ProductType={source_info['product_type']}"
-    )
-    if not complete:
-        messages.append(
-            "CustomerInstall/j215ap additional manifest files are not present yet; "
-            "continuing because --materialize-additional-manifests is part of this run."
-        )
+    messages.append(f"Selected blueprint identity: DeviceClass={source_info['device_class']}, ProductType={source_info['product_type']}")
 
     existing_variants = {
         _identity_info(identity)["variant"]
@@ -532,16 +538,19 @@ def _patch_msu_manifest(
     }
     variants_to_add = [variant for variant in MSU_VARIANTS if variant in existing_variants]
     if not variants_to_add:
-        raise RuntimeError("Refusing MSU manifest patch: this BuildManifest has no MSU variant names to mirror.")
+        raise RuntimeError("Refusing MSU manifest patch: this BuildManifest has no matching MSU variant configurations to mirror.")
 
-    target_device_classes = [TARGET_BOARD_ID]
-    if native_device_class and native_device_class not in target_device_classes:
-        target_device_classes.append(native_device_class)
+    # Always attempt to patch for the active target blueprint class and the host class if different
+    target_device_classes = [source_info["device_class"]]
+    if host_meta and host_meta["device_class"].lower() not in [str(x).lower() for x in target_device_classes]:
+        target_device_classes.append(host_meta["device_class"])
 
     additions: list[dict] = []
     for device_class in target_device_classes:
+        if not device_class:
+            continue
         if _has_msu_identity(asset_data, manifest, device_class):
-            messages.append(f"BuildManifest already has a usable {device_class} MSU identity.")
+            messages.append(f"BuildManifest already contains a usable {device_class} MSU structure.")
             continue
         for variant in variants_to_add:
             clone = copy.deepcopy(source_identity)
@@ -573,89 +582,80 @@ def _inspect(root: Path, apply: bool, materialize_additional: bool, materialize_
     print(f"\nStaged install data: {root}")
     info = _load_plist(info_path)
     print(
-        "Info.plist identity: "
+        "Current Info.plist configuration: "
         f"ProductVersion={info.get('ProductVersion')}, "
         f"ProductType={info.get('ProductType')}, "
-        f"HardwareModel={info.get('HardwareModel')}, "
-        f"DeviceClass={info.get('DeviceClass')}"
+        f"HardwareModel={info.get('HardwareModel')}"
     )
 
     manifest = _load_plist(manifest_path)
-    source_identity = _find_j215_install_identity(asset_data, manifest, require_additional_paths=False)
-    native_device_class = _verified_native_device_class()
-    print(f"Has CustomerInstall/j215ap x86 root_hash+mtree source identity: {bool(source_identity)}")
-    if source_identity:
-        complete, missing = _required_paths_exist(asset_data, source_identity)
-        print(f"CustomerInstall/j215ap additional manifest paths materialized: {complete}")
+    host_meta = _get_live_host_identity()
+    
+    if host_meta:
+        print(f"Discovered Live Host Profile: {host_meta['product_type']} ({host_meta['hardware_model']})")
+    else:
+        print("WARNING: Host platform variables could not be derived from ioreg. Skipping environment matching.", file=sys.stderr)
+
+    preferred_class = host_meta["device_class"] if host_meta else None
+    blueprint = _find_blueprint_identity(asset_data, manifest, preferred_class)
+    
+    if blueprint:
+        blueprint_info = _identity_info(blueprint)
+        print(f"Selected Manifest Blueprint: DeviceClass={blueprint_info['device_class']}")
+        complete, missing = _required_paths_exist(asset_data, blueprint)
+        print(f"Blueprint files fully materialized: {complete}")
         if not complete:
             for item in missing:
-                print(f"  Missing source materialization: {item}")
-    print(f"Has valid MSU/j215ap x86 root_hash+mtree identity: {_has_msu_identity(asset_data, manifest, TARGET_BOARD_ID)}")
-    if native_device_class:
-        print(f"Verified native MacBookPro15,1 bridge model fallback: {native_device_class}")
-        print(f"Has valid MSU/{native_device_class} x86 root_hash+mtree identity: {_has_msu_identity(asset_data, manifest, native_device_class)}")
+                print(f"  Missing: {item}")
     else:
-        print("Native MacBookPro15,1 bridge model fallback not verified on this host; skipping native fallback.")
+        print("CRITICAL: BuildManifest contains no valid CustomerInstall donor blueprints with raw path source items.")
 
-    for message in _patch_info_plist(info_path, apply):
+    for message in _patch_info_plist(info_path, host_meta, apply):
         print(message)
     if update_bundle_info_path.exists():
-        for message in _patch_asset_supported_models(update_bundle_info_path, native_device_class, apply):
+        for message in _patch_asset_supported_models(update_bundle_info_path, host_meta, apply):
             print(message)
-    if materialize_additional:
-        candidate = _find_j215_install_identity(asset_data, manifest, require_additional_paths=False)
-        if not candidate:
-            raise RuntimeError("Refusing materialize patch: no CustomerInstall/j215ap identity with existing x86 source paths found.")
-        for message in _materialize_additional_manifests(asset_data, candidate, apply):
+    if materialize_additional and blueprint:
+        for message in _materialize_additional_manifests(asset_data, blueprint, apply):
             print(message)
-    if materialize_bootcache_system_volume:
-        candidate = source_identity
-        if not candidate:
-            raise RuntimeError("Refusing bootcache root hash patch: no CustomerInstall/j215ap identity with existing x86 source paths found.")
-        for message in _materialize_bootcache_system_volume(asset_data, candidate, apply):
+    if materialize_bootcache_system_volume and blueprint:
+        for message in _materialize_bootcache_system_volume(asset_data, blueprint, apply):
             print(message)
     if patch_msu:
-        for message in _patch_msu_manifest(asset_data, manifest_path, apply, native_device_class, materialize_additional):
+        for message in _patch_msu_manifest(asset_data, manifest_path, apply, host_meta, materialize_additional):
             print(message)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Patch staged Tahoe stage-2 installer metadata for MacBookPro15,1 testing.")
+    parser = argparse.ArgumentParser(description="Patch staged Tahoe installer structures dynamically mapped to host context.")
     parser.add_argument("paths", nargs="*", help="Volume, macOS Install Data, or staged target path. Defaults to /Volumes/*.")
-    parser.add_argument("--apply", action="store_true", help="Write changes. Without this, only reports planned changes.")
+    parser.add_argument("--apply", action="store_true", help="Write modifications down to source configuration plists.")
     parser.add_argument(
         "--diagnose-logs",
         action="store_true",
-        help="Scan visible installer logs for known Tahoe Stage-2 fatal indicators and identity warnings.",
+        dest="diagnose_logs",
+        help="Scan visible installer logs for known Tahoe Stage-2 fatal indicators.",
     )
     parser.add_argument(
         "--patch-msu-manifest",
         action="store_true",
-        help="Experimental: clone the verified CustomerInstall/j215ap identity into existing MSU variants.",
+        help="Clone validated template components into active MSU layout sections.",
     )
     parser.add_argument(
         "--materialize-additional-manifests",
         action="store_true",
-        help="Create the usr/standalone/OS.dmg root_hash and mtree paths referenced by the j215ap identity.",
+        help="Build missing root_hash and mtree entries declared within target blueprint configurations.",
     )
     parser.add_argument(
         "--materialize-bootcache-system-volume",
         action="store_true",
-        help="Create the bootcaches.plist SystemVolume root_hash.img4 destination from the verified x86 SystemVolume manifest payload.",
+        help="Derive missing bootcaches SystemVolume requirements from source tracking manifest details.",
     )
     args = parser.parse_args()
 
     roots = _candidate_roots(args.paths)
     if not roots:
-        print("No mounted macOS Install Data folders found.")
-        print("Visible volumes:")
-        for volume in _visible_volume_summary():
-            print(f"  {volume}")
-        print(
-            "\nThis patch is intentionally staged-data only. Run it after the Tahoe installer "
-            "has copied files to the target and created macOS Install Data, before booting "
-            "the macOS Installer stage again."
-        )
+        print("No active macOS Install Data assets caught across system paths.")
         _diagnose_install_logs(args.paths)
         raise SystemExit(1)
 
@@ -673,13 +673,13 @@ def main() -> None:
 
     if not touched:
         _diagnose_install_logs(args.paths)
-        raise SystemExit("No staged Tahoe UpdateBundle/AssetData/Info.plist found.")
+        raise SystemExit("Target structural path sweeps yielded zero staged UpdateBundle configurations.")
 
     if args.diagnose_logs:
         _diagnose_install_logs(args.paths)
 
     if not args.apply:
-        print("\nDry-run only. Re-run with --apply to write guarded patches.")
+        print("\nEvaluation complete. Run with --apply to commit modifications.")
 
 
 if __name__ == "__main__":
