@@ -6,7 +6,7 @@ Forks when naming their projects, they shouldn't put misleading names such as OC
 2. If none is found, the developer of the main project (Albert Müller) may open up an issue requesting to rename the project
 3. If the project is confirmed malicious, the main developer (Albert Müller) may report directly to GitHub
 
-This applies only to forks uploading their forks as projects instead of clicking the Fork button. When clicking the Fork button, by default the name is OpenCore Legacy Patcher T2 and these are less visible in the internet and harder for attacks to even pull off.
+This applies only to forks uploading their forks as projects instead of clicking the Fork button. When clicking the Fork button, by default the name is OpenCore Legacy Patcher T2 and these are less visible in the internet and harder for attackers even to pull off the attack.
 
 ## Up to date Versions
 
