@@ -1,6 +1,7 @@
 # Security Policy
 
 ## Fork and project naming
+This applies only to forks uploading their forks as projects instead of clicking the Fork button. When clicking the Fork button, by default the name is OpenCore Legacy Patcher T2 and these are less visible in the internet and harder for attacks to even pull off.
 Forks when naming their projects, they shouldn't put misleading names such as OCLP-T2, OpenCоrе-Legacy-Patcher-T2 (with cyrillic o and e) or OpenCore-Legacy-Patcher-2-2. This is considered typosquatting. If typosquatted, one of the following actions may take place:
 1. Scan the fork for malware by human
 2. If none is found, the developer of the main project (Albert Müller) may open up an issue requesting to rename the project
