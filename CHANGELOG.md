@@ -974,12 +974,17 @@ Behebung einer Sicherheitslücke: Beim Versuch, ein Update zu starten, konnte ei
 ## 4.0.0 pre-alpha 3 for alpha 15 / 4.0.0 Voralpha 3 für Alpha 15
 This release:
 
-fixes a bug where required entries for OpenCore 1.0.7 are deleted by support.py
-updates actions/checkout to v6
-Fixes a bug where t2smbiossecurity.py generates an invalid EFI
+- fixes a bug where required entries for OpenCore 1.0.7 are deleted by support.py
+
+- updates actions/checkout to v6
+
+- Fixes a bug where t2smbiossecurity.py generates an invalid EFI
+
 Fixes several vulnerabilities:
+
 Arbitrary File Deletion (The "Nuke" Bug)
 The Vulnerability: The original code used subprocess.run(["rm", "-rf", self.constants.build_path]). If build_path was ever returned as an empty string, a single space, or a top-level directory (like ~ or /) due to a bug elsewhere in the code, the script would delete everything it had permission to access.
+
 The Fix: We now use shutil.rmtree combined with a Name Guard. The script now verifies that the folder name is explicitly Build-Folder before it allows a recursive deletion. This ensures that even if the path is misconfigured, it won't wipe out your home directory.
 
 Shell Injection (Command Hijacking)
@@ -997,9 +1002,13 @@ The Fix: Implemented a try...finally block at the highest level of the init meth
 Diese Version:
 
 behebt einen Fehler, bei dem erforderliche Einträge für OpenCore 1.0.7 von support.py gelöscht wurden
+
 aktualisiert actions/checkout auf v6
+
 behebt einen Fehler, bei dem t2smbiossecurity.py eine ungültige EFI-Datei erzeugte
+
 behebt mehrere Sicherheitslücken:
+
 Willkürliches Löschen von Dateien (Der „Nuke“-Bug)
 Die Sicherheitslücke: Der ursprüngliche Code verwendete subprocess.run(["rm", "-rf", self.constants.build_path]). Falls build_path aufgrund eines Fehlers an anderer Stelle im Code jemals als leerer String, als einzelnes Leerzeichen oder als Verzeichnis der obersten Ebene (wie ~ oder /) zurückgegeben worden wäre, hätte das Skript alles gelöscht, worauf es Zugriffsberechtigungen besaß.
 Die Behebung: Wir verwenden nun shutil.rmtree in Kombination mit einem „Name Guard“ (Namensschutz). Das Skript überprüft nun, ob der Ordnername explizit „Build-Folder“ lautet, bevor es eine rekursive Löschung zulässt. Dies stellt sicher, dass selbst bei einer Fehlkonfiguration des Pfades nicht Ihr gesamtes Home-Verzeichnis gelöscht wird.
