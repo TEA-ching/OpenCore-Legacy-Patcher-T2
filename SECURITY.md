@@ -30,3 +30,4 @@ We strongly encourage using **Private Vulnerability Reporting** to disclose secu
 
 Note:
 If it is a fork of this project, then enabling the Report a vulnerability button is up to the maintainer of the fork. In case they don't enable this button, open an Issue with a [Vulnerability] tag.
+And forks may have different timeline on fixing certain vulnerabilities.
