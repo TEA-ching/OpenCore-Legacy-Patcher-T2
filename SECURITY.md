@@ -2,7 +2,7 @@
 
 ## Fork and project naming (doesn't apply to forks forked directly through the GitHub interface)
 Forks when naming their projects, they shouldn't put misleading names such as OCLP-T2, OpenCоrе-Legacy-Patcher-T2 (with cyrillic o and e) or OpenCore-Legacy-Patcher-2-2. This is considered typosquatting. If typosquatted, one of the following actions may take place:
-1. Scan the fork for malware by human
+1. Scan the fork for malware (e.g looking for malware in the source code, test it inside a virtual machine or sandbox) by the developer of the main project (Albert Müller)
 2. If none is found, the developer of the main project (Albert Müller) may open up an issue requesting to rename the project
 3. If the project is confirmed malicious, the main developer (Albert Müller) may report directly to GitHub
 
@@ -23,7 +23,7 @@ We strongly encourage using **Private Vulnerability Reporting** to disclose secu
 ### How to report:
 1. Navigate to the **Security** tab of the repository.
 2. Click the **Report a vulnerability** button.
-3. Provide all necessary details and a Safe Proof of Concept (PoC) that does not contain or distribute real malware.
+3. Provide all necessary details and a Safe Proof of Concept (PoC) that does not contain or distribute real malware. A safe PoC should trigger a harmless behavior, for example creating a folder/file on the desktop or showing logs.
 
 ### Out-of-Scope Reports:
 **Do not** report disabling SIP (System Integrity Protection) or AMFI (Apple Mobile File Integrity) as vulnerabilities. These are necessary components for bypassing minimum system requirements and will be dismissed.
