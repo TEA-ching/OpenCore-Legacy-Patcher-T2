@@ -130,7 +130,7 @@ class macOSInstallerDownloadFrame(wx.Frame):
             self.available_installers = self.catalog_products.products
             self.available_installers_latest = self.catalog_products.latest_products
             
-            # FIX: Sicherer Rückruf in den Haupt-Thread nach Beendigung des Netzwerkvorgangs
+            # Sicherer Rückruf in den Haupt-Thread nach Beendigung des Netzwerkvorgangs
             wx.CallAfter(self._on_fetch_success)
 
         thread = threading.Thread(target=_fetch_installers)
@@ -348,9 +348,7 @@ class macOSInstallerDownloadFrame(wx.Frame):
         self.extract_animation.start_pulse()
 
         def extract_installer():
-            # Extraktion im echten Hintergrund-Thread ausführen
             result = macos_installer_handler.InstallerCreation().install_macOS_installer(self.constants.payload_path)
-            # FIX: UI-Update sicher zurück an den Hauptthread übergeben
             wx.CallAfter(self._on_extraction_complete, result)
 
         thread = threading.Thread(target=extract_installer)
@@ -386,8 +384,6 @@ class macOSInstallerDownloadFrame(wx.Frame):
     def on_download(self, event: wx.Event) -> None:
         self.frame_modal.Close()
         self.parent.Hide()
-        
-        # FIX: Wir erzeugen das neue Frame, ohne den Parent asynchron zu crashen
         self._generate_catalog_frame()
 
     def on_existing(self, event: wx.Event = None) -> None:
