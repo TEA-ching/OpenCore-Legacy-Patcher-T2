@@ -1,7 +1,13 @@
 # OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungslog
 
 ## 4.0.0 alpha 15.3 (about to be released)
-This version fixes a CI/CD bug where building the application takes 120 seconds instead of 60-90 seconds.
+This version fixes bugs in OpenCore-GUI-Spec and Build-Project.command. It also allows for users to build Universal2 or arm64 apps if the developer compiles the application on Apple Silicon without further changes.
+This update is recommended for all users.
+For those who installed 4.0.0 alpha 15.2, they should update immediately as alpha 15.2 fixed nothing but introduced serious bugs.
+
+Diese Version behebt Fehler in OpenCore-GUI-Spec und Build-Project.command. Sie ermöglicht es Benutzern außerdem, Universal2- oder arm64-Apps zu erstellen, sofern der Entwickler die Anwendung ohne weitere Änderungen auf Apple Silicon kompiliert.
+Wer Version 4.0.0 alpha 15.2 installiert hat, sollte umgehend aktualisieren, da alpha 15.2 nichts behoben, sondern nur schwerwiegende Fehler eingeführt hat.
+Dieses Update ist für alle Benutzer empfohlen.
 
 ## 4.0.0 alpha 15.1
 Thanks @GUTY345 for contributing to this project!
