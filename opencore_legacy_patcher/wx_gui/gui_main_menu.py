@@ -354,36 +354,23 @@ class MainFrame(wx.Frame):
         webbrowser.open(url)
     
     def on_gemini_help(self, event: wx.Event):
-        logging.info("- Launching Gemini AI Assistant (Native wx.html2)")
-        logging.info("- Gemini AI Assistant starten (Native wx.html2)")
+        import webview # Import here to avoid slowing down OCLP startup
         
-        # FIX: Explizite Übergabe der macOS-Standard-Styles (Systemmenü + Titel + Schließen-Button)
-        help_frame = wx.Frame(
-            self, 
-            title='Gemini AI Assistant', 
-            size=(500, 850), 
-            style=wx.SYSTEM_MENU | wx.CAPTION | wx.CLOSE_BOX | wx.RESIZE_BORDER
+        logging.info("- Launching Gemini AI Assistant (pywebview)")
+        
+        # Create a sleek, floating window
+        window = webview.create_window(
+            title='Gemini AI Assistant',
+            url='https://gemini.google.com',
+            width=500,
+            height=850,
+            confirm_close=False,
+            background_color='#ffffff'
         )
-        help_frame.SetMinSize((400, 600))
         
-        panel = wx.Panel(help_frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # WebView an das Panel binden
-        browser = wx.html2.WebView.New(panel, style=wx.BORDER_NONE)
-        browser.LoadURL('https://gemini.google.com')
-        
-        sizer.Add(browser, 1, wx.EXPAND)
-        panel.SetSizer(sizer)
-        
-        self.active_gemini_frame = help_frame
-        
-        # Cleanup-Callback beim Schließen über das rote 'X'
-        help_frame.Bind(wx.EVT_CLOSE, lambda e: [wx.CallAfter(help_frame.Destroy), setattr(self, 'active_gemini_frame', None)])
-        
-        help_frame.Centre()
-        help_frame.Show()
-        help_frame.Raise()  # Bringt das Fenster in den Fokus
+        # start() is blocking by default, but in a wxPython app, 
+        # it usually needs to run in its own flow.
+        webview.start()
 
     def on_build_and_install(self, event: wx.Event = None):
         try:
