@@ -163,11 +163,10 @@ class MainFrame(wx.Frame):
 
     def _preflight_checks(self):
         try:
-            # 1. HEAL THE CONFIG: If no build model is set, set it to the current Mac
             if self.constants.computer.build_model is None:
                 logging.info("No build model detected. Defaulting to current host hardware.")
                 self.constants.computer.build_model = self.constants.computer.real_model
-            # Clean strings and diagnostic print
+            
             real_model = str(self.constants.computer.real_model).strip()
             build_model = str(self.constants.computer.build_model).strip() if self.constants.computer.build_model else None
             
@@ -176,10 +175,8 @@ class MainFrame(wx.Frame):
             if (
                 build_model is not None and
                 build_model != real_model and
-                self.constants.computer.build_model != self.constants.computer.real_model and
                 self.constants.host_is_hackintosh is False
             ):
-                # This block is skipped for native Macs
                 pop_up = wx.MessageDialog(
                     self,
                     f"We found you are currently booting OpenCore built for a different unit: {build_model}\n\nPlease Build and Install a new OpenCore config.",
@@ -193,11 +190,12 @@ class MainFrame(wx.Frame):
         except Exception as e:
             print(f"DEBUG: Preflight error: {e}")
 
-        # The update check remains outside the if-statement
-        threading.Thread(target=self._check_for_updates).start()
+        # Fix: Spin up exactly ONE daemon thread, and track it
+        self.update_thread = threading.Thread(target=self._check_for_updates)
+        self.update_thread.daemon = True  # Allows python to exit cleanly even if thread hangs
+        self.update_thread.start()
 
         if "--update_installed" in sys.argv and self.constants.has_checked_updates is False and gui_support.CheckProperties(self.constants).host_can_build():
-            # Notify user that the update has been installed
             self.constants.has_checked_updates = True
             pop_up = wx.MessageDialog(
                 self,
@@ -211,7 +209,6 @@ class MainFrame(wx.Frame):
                 logging.info("Skipping OpenCore and root volume patch update...")
                 return
 
-
             logging.info("Updating OpenCore and root volume patches...")
             self.constants.update_stage = gui_support.AutoUpdateStages.CHECKING
             self.Hide()
@@ -223,8 +220,6 @@ class MainFrame(wx.Frame):
                 screen_location=pos
             )
             self.Close()
-
-        threading.Thread(target=self._check_for_updates).start()
 
     def _check_for_updates(self):
         if self.constants.has_checked_updates is True:
@@ -430,20 +425,22 @@ Please check the Github page for more information about this release."""
         webbrowser.open(url)
     
     def on_gemini_help(self, event: wx.Event):
-        import webview # Import here to avoid slowing down OCLP startup
+        import webview 
         
         logging.info("- Launching Gemini AI Assistant (pywebview)")
         
-        # Create a sleek, floating window
-        window = webview.create_window(
-            title='Gemini AI Assistant',
-            url='https://gemini.google.com',
-            width=500,
-            height=850,
-            confirm_close=False,
-            background_color='#ffffff'
-        )
-        
-        # start() is blocking by default, but in a wxPython app, 
-        # it usually needs to run in its own flow.
-        webview.start()
+        def launch_webview():
+            window = webview.create_window(
+                title='Gemini AI Assistant',
+                url='https://gemini.google.com',
+                width=500,
+                height=850,
+                confirm_close=False,
+                background_color='#ffffff'
+            )
+            webview.start()
+
+        # Fix: Isolate the blocking webview mainloop from wxPython's UI thread
+        webview_thread = threading.Thread(target=launch_webview)
+        webview_thread.daemon = True
+        webview_thread.start()
