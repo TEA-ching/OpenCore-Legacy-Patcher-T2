@@ -51,6 +51,7 @@ And this also allows attackers to set up a condition where gui_help.HelpFrame fr
 
 s=False
 def on_help(self, event: wx.Event = None):
+
 if s=True: #sehr gefährlich
 
 gui_help.HelpFrame(
