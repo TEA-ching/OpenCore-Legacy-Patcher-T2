@@ -48,6 +48,10 @@ class MainFrame(wx.Frame):
 
         self.model_label: wx.StaticText = None
         self.build_button: wx.Button = None
+        
+        # FIX: Absicherung gegen Thread-Races & Verwaiste Fenster-Referenzen
+        self.exiting_app: bool = False  
+        self.active_gemini_frame: wx.Frame = None
 
         self.constants.update_stage = gui_support.AutoUpdateStages.INACTIVE
 
@@ -55,6 +59,9 @@ class MainFrame(wx.Frame):
 
         self.Centre()
         self.Show()
+
+        # FIX: Sauberes Schließen abfangen, um macOS Autorelease-Pool-Crashes zu verhindern
+        self.Bind(wx.EVT_CLOSE, self.on_close_window)
 
         self._preflight_checks()
 
@@ -216,7 +223,7 @@ class MainFrame(wx.Frame):
                 global_constants=self.constants,
                 screen_location=pos
             )
-            self.Close()
+            wx.CallAfter(self.Destroy)
 
     def _check_for_updates(self):
         if self.constants.has_checked_updates is True:
@@ -249,31 +256,35 @@ class MainFrame(wx.Frame):
             if remote_version_str == local_version_str:
                 return
     
+        if getattr(self, 'exiting_app', False):
+            return
+
         logging.info(f"Newer version detected: {remote_version_str}")
         
-        # FIX: Netzwerk-Request für den Changelog in den Hintergrundthread verschoben!
         url = "https://api.github.com/repos/albert-mueller/OpenCore-Legacy-Patcher-T2/releases/latest"
         changelog = """## Unable to fetch changelog\n\nPlease check the Github page for more information."""
         try:
-            # User-Agent hinzugefügt, um GitHub Rate-Limits zu minimieren
             response = requests.get(url, headers={"User-Agent": "OpenCore-Legacy-Patcher-T2"}, timeout=10).json()
             if "body" in response:
                 changelog = response["body"].split("## Asset Information")[0]
         except Exception as e:
             logging.error(f"Failed to fetch changelog text: {e}")
 
-        # Sicher an den Main-Thread übergeben samt extrahiertem Changelog
-        wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"], changelog)
+        if not getattr(self, 'exiting_app', False):
+            wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"], changelog)
         
-    # FIX: changelog_text als Parameter hinzugefügt, um UI-Blocking zu verhindern
     def on_update(self, oclp_url: str, oclp_version: str, oclp_github_url: str, changelog_text: str):
+        if not self:
+            return
 
         ID_GITHUB = wx.NewIdRef() if hasattr(wx, "NewIdRef") else wx.NewId()
         ID_UPDATE = wx.NewIdRef() if hasattr(wx, "NewIdRef") else wx.NewId()
 
         html_markdown = markdown2.markdown(changelog_text, extras=["tables"])
         html_css = css_data.updater_css
-        frame = wx.Dialog(None, -1, title="", size=(650, 500))
+        
+        # Parent auf self gesetzt zur sauberen Speicherhierarchie
+        frame = wx.Dialog(self, -1, title="", size=(650, 500))
         frame.SetMinSize((650, 500))
         frame.SetWindowStyle(wx.STAY_ON_TOP)
         panel = wx.Panel(frame)
@@ -344,32 +355,37 @@ class MainFrame(wx.Frame):
     def on_gemini_help(self, event: wx.Event):
         logging.info("- Launching Gemini AI Assistant (Native wx.html2)")
         
+        # FIX: Standard-Stil verwenden (verhindert das Verschwinden der macOS-Knöpfe)
         help_frame = wx.Frame(
             self, 
             title='Gemini AI Assistant', 
-            size=(500, 850),
-            style=wx.DEFAULT_FRAME_STYLE & ~(wx.MAXIMIZE_BOX)
+            size=(500, 850), 
+            style=wx.DEFAULT_FRAME_STYLE
         )
         help_frame.SetMinSize((400, 600))
         
         panel = wx.Panel(help_frame)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        
         browser = wx.html2.WebView.New(panel, style=wx.BORDER_NONE)
         browser.LoadURL('https://gemini.google.com')
         
         sizer.Add(browser, 1, wx.EXPAND)
         panel.SetSizer(sizer)
         
+        self.active_gemini_frame = help_frame
+        
+        # Internen Cleanup-Callback binden
+        help_frame.Bind(wx.EVT_CLOSE, lambda e: [wx.CallAfter(help_frame.Destroy), setattr(self, 'active_gemini_frame', None)])
+        
         help_frame.Centre()
         help_frame.Show()
+        help_frame.Raise()
 
-    # Die restlichen on_X-Methoden bleiben identisch...
     def on_build_and_install(self, event: wx.Event = None):
         try:
             self.Hide()
             gui_build.BuildFrame(parent=None, title=self.title, global_constants=self.constants, screen_location=self.GetPosition())
-            self.Destroy()
+            wx.CallAfter(self.Destroy)
         except Exception as e:
             logging.error(f"We failed to open up Build and Install OpenCore: {e}")
 
@@ -396,3 +412,17 @@ class MainFrame(wx.Frame):
             gui_help.HelpFrame(parent=self, title=self.title, global_constants=self.constants, screen_location=self.GetPosition())
         except Exception as e:
             logging.error(f"We failed to open up Help: {e}")
+
+    def on_close_window(self, event: wx.Event):
+        """ Sauberes Entladen aller Cocoa-Ressourcen beim Schließen """
+        self.exiting_app = True
+        
+        # FIX: Offenes Gemini-Fenster vor App-Terminierung im Speicher killen
+        if getattr(self, 'active_gemini_frame', None):
+            try:
+                self.active_gemini_frame.Destroy()
+            except Exception:
+                pass
+                
+        wx.GetApp().SafeYield(None, True)
+        self.Destroy()
