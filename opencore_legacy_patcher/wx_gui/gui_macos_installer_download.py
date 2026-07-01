@@ -228,4 +228,209 @@ class macOSInstallerDownloadFrame(wx.Frame):
         rectsizer.Add(self.select_button, 0, wx.EXPAND | wx.LEFT, 5)
 
         checkboxsizer = wx.BoxSizer(wx.HORIZONTAL)
-        checkboxsizer.Add(self.showolderversions_
+        checkboxsizer.Add(self.showolderversions_checkbox, 0, wx.ALIGN_CENTRE | wx.RIGHT, 5)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.AddSpacer(10)
+        sizer.Add(title_label, 0, wx.ALIGN_CENTRE | wx.ALL, 0)
+        sizer.Add(self.list, 1, wx.EXPAND | wx.ALL, 10)
+        sizer.Add(rectsizer, 0, wx.ALIGN_CENTRE | wx.ALL, 0)
+        sizer.Add(checkboxsizer, 0, wx.ALIGN_CENTRE | wx.ALL, 15)
+        sizer.Add(return_button, 0, wx.ALIGN_CENTRE | wx.BOTTOM, 15)
+
+        self.frame_modal.SetSizer(sizer)
+        self.frame_modal.ShowWindowModal()
+
+    def on_copy_link(self, installers: dict) -> None:
+        selected_item = self.list.GetFirstSelected()
+        if selected_item != -1:
+            clipboard = wx.Clipboard.Get()
+            if not clipboard.IsOpened():
+                clipboard.Open()
+            clipboard.SetData(wx.TextDataObject(installers[selected_item]['InstallAssistant']['URL']))
+            clipboard.Close()
+            wx.MessageDialog(self.frame_modal, "Download link copied to clipboard", "", wx.OK | wx.ICON_INFORMATION).ShowModal()
+
+    def on_select_list(self, event):
+        if self.list.GetSelectedItemCount() > 0:
+            self.select_button.Enable()
+            self.copy_button.Enable()
+        else:
+            self.select_button.Disable()
+            self.copy_button.Disable()
+
+    def on_download_installer(self, installers: dict) -> None:
+        selected_item = self.list.GetFirstSelected()
+        if selected_item != -1:
+            selected_installer = installers[selected_item]
+            logging.info(f"Selected macOS {selected_installer['Version']} ({selected_installer['Build']})")
+
+            problems = []
+            model = self.constants.custom_model or self.constants.computer.real_model
+            if model in smbios_data.smbios_dictionary:
+                if selected_installer["InstallAssistant"]["XNUMajor"] >= os_data.os_data.ventura:
+                    if smbios_data.smbios_dictionary[model]["CPU Generation"] <= cpu_data.CPUGen.penryn or model in ["MacPro4,1", "MacPro5,1", "Xserve3,1"]:
+                        if model.startswith("MacBook"):
+                            problems.append("Lack of internal Keyboard/Trackpad in macOS installer.")
+                        else:
+                            problems.append("Lack of internal Keyboard/Mouse in macOS installer.")
+
+            if problems:
+                logging.warning(f"Potential issues with {model} and {selected_installer['Version']} ({selected_installer['Build']}): {problems}")
+                problems = "\n".join(problems)
+                dlg = wx.MessageDialog(self.frame_modal, f"Your model ({model}) may not be fully supported by this installer. You may encounter the following issues:\n\n{problems}\n\nFor more information, see associated page. Otherwise, we recommend using macOS Monterey", "Potential Issues", wx.YES_NO | wx.CANCEL | wx.ICON_WARNING)
+                dlg.SetYesNoCancelLabels("View Github Issue", "Download Anyways", "Cancel")
+                result = dlg.ShowModal()
+                if result == wx.ID_CANCEL:
+                    return
+                elif result == wx.ID_YES:
+                    webbrowser.open("https://github.com/dortania/OpenCore-Legacy-Patcher/issues/1021")
+                    return
+
+            host_space = utilities.get_free_space()
+            needed_space = selected_installer['InstallAssistant']['Size'] * 2
+            if host_space < needed_space:
+                logging.error(f"Insufficient space to download and extract: {utilities.human_fmt(host_space)} available vs {utilities.human_fmt(needed_space)} required")
+                dlg = wx.MessageDialog(self.frame_modal, f"You do not have enough free space to download and extract this installer. Please free up some space and try again\n\n{utilities.human_fmt(host_space)} available vs {utilities.human_fmt(needed_space)} required", "Insufficient Space", wx.OK | wx.ICON_WARNING)
+                dlg.ShowModal()
+                return
+
+            self.frame_modal.Close()
+
+            expected_checksum, checksum_algo = self.catalog_products.checksum_for_product(selected_installer)
+
+            download_obj = network_handler.DownloadObject(
+                selected_installer["InstallAssistant"]["URL"], self.constants.payload_path / "InstallAssistant.pkg", checksum_algo=checksum_algo
+            )
+
+            gui_download.DownloadFrame(
+                self,
+                title=self.title,
+                global_constants=self.constants,
+                download_obj=download_obj,
+                item_name=f"macOS {selected_installer['Version']} ({selected_installer['Build']})",
+                download_icon=self.constants.icons_path[self._macos_version_to_icon(selected_installer["InstallAssistant"]["XNUMajor"])]
+            )
+
+            if download_obj.download_complete is False:
+                self.on_return_to_main_menu()
+                return
+
+            self._validate_installer(expected_checksum, download_obj.checksum)
+
+    def _validate_installer(self, expected_checksum: str, calculated_checksum: str) -> None:
+        if expected_checksum != calculated_checksum:
+            logging.error(f"Checksum validation failed: Expected {expected_checksum}, got {calculated_checksum}")
+            wx.MessageBox(f"Checksum validation failed!\n\nThis generally happens when downloading on unstable connections such as WiFi or cellular.\n\nPlease try redownloading again on a stable connection (ie. Ethernet)", "Corrupted Installer!", wx.OK | wx.ICON_ERROR)
+            self.on_return_to_main_menu()
+            return
+
+        self.SetSize((300, 200))
+        for child in self.GetChildren():
+            child.Destroy()
+
+        logging.info("macOS installer validated")
+
+        title_label = wx.StaticText(self, label="Extracting macOS Installer", pos=(-1, 5))
+        title_label.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
+        title_label.Centre(wx.HORIZONTAL)
+
+        self.chunk_label = wx.StaticText(self, label="May take a few minutes...", pos=(-1, title_label.GetPosition()[1] + title_label.GetSize()[1] + 5))
+        self.chunk_label.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
+        self.chunk_label.Centre(wx.HORIZONTAL)
+
+        self.extract_progress_bar = wx.Gauge(self, range=100, pos=(-1, self.chunk_label.GetPosition()[1] + self.chunk_label.GetSize()[1] + 5), size=(270, 30))
+        self.extract_progress_bar.Centre(wx.HORIZONTAL)
+
+        self.SetSize((-1, self.extract_progress_bar.GetPosition()[1] + self.extract_progress_bar.GetSize()[1] + 40))
+        self.Show()
+
+        self.extract_animation = gui_support.GaugePulseCallback(self.constants, self.extract_progress_bar)
+        self.extract_animation.start_pulse()
+
+        def extract_installer():
+            # Extraktion im echten Hintergrund-Thread ausführen
+            result = macos_installer_handler.InstallerCreation().install_macOS_installer(self.constants.payload_path)
+            # FIX: UI-Update sicher zurück an den Hauptthread übergeben
+            wx.CallAfter(self._on_extraction_complete, result)
+
+        thread = threading.Thread(target=extract_installer)
+        thread.start()
+
+    def _on_extraction_complete(self, result: bool):
+        self.extract_animation.stop_pulse()
+        self.extract_progress_bar.Hide()
+        
+        self.chunk_label.SetLabel("Successfully extracted macOS installer" if result is True else "Failed to extract macOS installer")
+        self.chunk_label.Centre(wx.HORIZONTAL)
+
+        create_installer_button = wx.Button(self, label="Create macOS Installer", pos=(-1, self.extract_progress_bar.GetPosition()[1]), size=(170, 30))
+        create_installer_button.Bind(wx.EVT_BUTTON, self.on_existing)
+        create_installer_button.Centre(wx.HORIZONTAL)
+        if result is False:
+            create_installer_button.Disable()
+
+        return_button = wx.Button(self, label="Return to Main Menu", pos=(-1, create_installer_button.GetPosition()[1] + create_installer_button.GetSize()[1]), size=(150, 30))
+        return_button.Bind(wx.EVT_BUTTON, self.on_return_to_main_menu)
+        return_button.Centre(wx.HORIZONTAL)
+
+        self.SetSize((-1, return_button.GetPosition()[1] + return_button.GetSize()[1] + 40))
+
+        if result is False:
+            wx.MessageBox("An error occurred while extracting the macOS installer. Could be due to a corrupted installer", "Error", wx.OK | wx.ICON_ERROR, self)
+            return
+
+        user_input = wx.MessageBox("Finished extracting the installer, would you like to continue and create a macOS installer?", "Create macOS Installer?", wx.YES_NO | wx.ICON_QUESTION, self)
+        if user_input == wx.YES:
+            self.on_existing()
+
+    def on_download(self, event: wx.Event) -> None:
+        self.frame_modal.Close()
+        self.parent.Hide()
+        
+        # FIX: Wir erzeugen das neue Frame, ohne den Parent asynchron zu crashen
+        self._generate_catalog_frame()
+
+    def on_existing(self, event: wx.Event = None) -> None:
+        frames = [self, self.frame_modal, self.parent]
+        screen_pos = self.GetScreenPosition() if self else None
+        
+        for frame in frames:
+            if frame:
+                try:
+                    frame.Close()
+                except Exception:
+                    pass
+                    
+        gui_macos_installer_flash.macOSInstallerFlashFrame(
+            None,
+            title=self.title,
+            global_constants=self.constants,
+            **({"screen_location": screen_pos} if screen_pos else {})
+        )
+        
+        for frame in frames:
+            if frame:
+                try:
+                    frame.Destroy()
+                except Exception:
+                    pass
+
+    def on_return(self, event: wx.Event) -> None:
+        self.frame_modal.Close()
+
+    def on_return_to_main_menu(self, event: wx.Event = None) -> None:
+        if self.frame_modal:
+            self.frame_modal.Hide()
+        
+        main_menu_frame = gui_main_menu.MainFrame(
+            None,
+            title=self.title,
+            global_constants=self.constants,
+            screen_location=self.GetScreenPosition()
+        )
+        main_menu_frame.Show()
+        
+        if self.frame_modal:
+            self.frame_modal.Destroy()
+        self.Destroy()
