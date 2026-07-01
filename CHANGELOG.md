@@ -15,26 +15,28 @@ Behebt einen Fehler, indem unter einige Konditionen keine automatische Updates i
 ## 4.0.0 alpha 15
 This release:
 
-fixes a bug where EFI files for Windows may be deleted on any Mac model, causing Windows EFI entries to be missing. One catch for T2 Macs: you can't upgrade to Windows 11 if you haven't done so due to #69 having impact on Windows as well. If you are running Windows 10 Pro or Home, you should opt for Extended Security Updates instead and wait until the APFS issues are fixed before upgrading to Windows 11.
+- fixes a bug where EFI files for Windows may be deleted on any Mac model, causing Windows EFI entries to be missing. One catch for T2 Macs: you can't upgrade to Windows 11 if you haven't done so due to #69 having impact on Windows as well. If you are running Windows 10 Pro or Home, you should opt for Extended Security Updates instead and wait until the APFS issues are fixed before upgrading to Windows 11.
 OpenCore 1.0.7 stability fixes
-Starts implementing fixes for #69 however it is not fully fixed. Fixing fully requires significant amount of time. The error described in this issue still appears. The issue is related to a lot of stuff and fixing it requires significant amount of time.
-Fixes a bug where non-T2 Macs that require Root Patching for WiFi, during root patching the process crashes outright in the middle
+- Starts implementing fixes for #69 however it is not fully fixed. Fixing fully requires significant amount of time. The error described in this issue still appears. The issue is related to a lot of stuff and fixing it requires significant amount of time.
+- Fixes a bug where non-T2 Macs that require Root Patching for WiFi, during root patching the process crashes outright in the middle
 Improves Modern Wireless and Legacy Wireless patching on non-T2 Macs running macOS 26 Tahoe
-Switching out of Gemini for patches completely, instead using NotebookLLM and human verification to fix stability issues
-Adds WiFi kernel patches for T2 Macs temporarily to fix the WiFi timing out (but the real cause of this timeout is WhateverGreen)
-Improves download speed and reliability for downloading macOS installers; now if you have a 300Mbps network you won't have to wait 45 minutes to download the macOS installer at all
-Fix HDMI issues on Mac mini 2018 where when using HDMI the screen is completely white
-Modernized the OpenCore Legacy Patcher T2 app
-Removes risky patches on MacBookAir8,1 and MacBookAir8,2 that may have caused kernel panics
-removes the corecrypto patch for T2 Macs that actually hide the real problem rather than fix it
-Now when installing OpenCore to disk, it will ask every time it does anything on the EFI partition so attackers can't blindly execute code as root. This turns the control of what code the user executes back to the user themselves and that only the admin holds the keys to the kingdom.
-When installing OpenCore to disk, now logs are available in German and English - it will first appear in German and right below it - in English.
-Now the support menu gets rid of Official Phone Support button completely (it just opened a YouTube video instead)
-Now the options point to this repo's ressources rather than Dortania's
-Remove SMBIOS forcing for MacBookPro15,1 that may cause kernel panics
-Adds macOS 27 Golden Gate constants; this doesn't mean macOS 27 support for unsupported Macs. It is meant to check if you are targeting Golden Gate and if yes abort installing OpenCore to disk completely.
-Fixes a lot of vulnerabilities:
+- Switching out of Gemini for patches completely, instead using NotebookLLM and human verification to fix stability issues
+- Adds WiFi kernel patches for T2 Macs temporarily to fix the WiFi timing out (but the real cause of this timeout is WhateverGreen)
+- Improves download speed and reliability for downloading macOS installers; now if you have a 300Mbps network you won't have to wait 45 minutes to download the macOS installer at all
+- Fix HDMI issues on Mac mini 2018 where when using HDMI the screen is completely white
+- Modernized the OpenCore Legacy Patcher T2 app
+- Removes risky patches on MacBookAir8,1 and MacBookAir8,2 that may have caused kernel panics
+- removes the corecrypto patch for T2 Macs that actually hide the real problem rather than fix it
+- Now when installing OpenCore to disk, it will ask every time it does anything on the EFI partition so attackers can't blindly execute code as root. This turns the control of what code the user executes back to the user themselves and that only the admin holds the keys to the kingdom.
+- When installing OpenCore to disk, now logs are available in German and English - it will first appear in German and right below it - in English.
+- Now the support menu gets rid of Official Phone Support button completely (it just opened a YouTube video instead)
+- Now the options point to this repo's ressources rather than Dortania's
+- Remove SMBIOS forcing for MacBookPro15,1 that may cause kernel panics
+- Adds macOS 27 Golden Gate constants; this doesn't mean macOS 27 support for unsupported Macs. It is meant to check if you are targeting Golden Gate and if yes abort installing OpenCore to disk completely.
+- Fixes a lot of vulnerabilities:
+
 2 vulnerabilities in the gui_main_menu.py that affected all menus, including Install OpenCore, Install drivers and patches, Create macOS installer as well:
+
 def on_help(self, event: wx.Event = None):
 gui_help.HelpFrame(
 parent=self,
