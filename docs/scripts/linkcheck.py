@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -10,26 +11,29 @@ md_files = [
     if not any(ignored in p.parts for ignored in IGNORED_DIRS)
 ]
 
+# Dynamically locate npx to prevent FileNotFoundError in GUI environments/Git hooks
+npx_path = shutil.which("npx") or "npx"
+
 for file_path in md_files:
-    # Pass as a list, remove shell=True to prevent injection.
-    # Set cwd to file_path.parent so relative links inside the markdown file resolve correctly.
+    # Pass arguments as a list (shell=False) to ensure security.
+    # Set cwd to file_path.parent so relative markdown links resolve correctly.
     result = subprocess.run(
-        ["npx", "markdown-link-check", file_path.name],
+        [npx_path, "markdown-link-check", file_path.name],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,  # Automatically handles decoding to string, skipping .decode()
+        text=True,  # Automatically handles string decoding and newline translation
         cwd=file_path.parent
     )
     
-    # Clean up output lines
-    lines = result.stdout.replace("\r", "").split("\n")
+    # Split output by lines (Universal Newlines mode handled by text=True)
+    lines = result.stdout.splitlines()
     
-    # Filter lines
+    # Filter lines to show only files, structural statuses, and strip out 429 rate limits
     filtered_lines = [
         line for line in lines 
         if ("FILE: " in line or " → Status: " in line) and " → Status: 429" not in line
     ]
     
-    # Clean printing
+    # Print the clean output
     for line in filtered_lines:
         print(line)
