@@ -50,6 +50,7 @@ This vulnerability allows an attacker to perform DoS by supplying the help menu 
 And this also allows attackers to set up a condition where gui_help.HelpFrame framework is never executed to execute arbitary code. For example:
 
 s=False
+
 def on_help(self, event: wx.Event = None):
 
 if s=True: #sehr gefährlich
