@@ -38,6 +38,7 @@ Improves Modern Wireless and Legacy Wireless patching on non-T2 Macs running mac
 2 vulnerabilities in the gui_main_menu.py that affected all menus, including Install OpenCore, Install drivers and patches, Create macOS installer as well:
 
 def on_help(self, event: wx.Event = None):
+
 gui_help.HelpFrame(
 parent=self,
 title=self.title,
@@ -51,14 +52,18 @@ And this also allows attackers to set up a condition where gui_help.HelpFrame fr
 s=False
 def on_help(self, event: wx.Event = None):
 if s=True: #sehr gefährlich
+
 gui_help.HelpFrame(
 parent=self,
 title=self.title,
 global_constants=self.constants,
 screen_location=self.GetPosition()
 )
+
 else:
+
 logging.info("Executing arbitary code")
+
 These 2 vulnerabilities are fixed by wrapping:
 gui_help.HelpFrame(
 parent=self,
