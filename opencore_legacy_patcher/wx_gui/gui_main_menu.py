@@ -269,6 +269,7 @@ class MainFrame(wx.Frame):
                 changelog = response["body"].split("## Asset Information")[0]
         except Exception as e:
             logging.error(f"Failed to fetch changelog text: {e}")
+            logging.error(f"Es hat fehlgeschlagen, den Changelog-Text anzuzeigen: {e}")
 
         if not getattr(self, 'exiting_app', False):
             wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"], changelog)
@@ -354,18 +355,21 @@ class MainFrame(wx.Frame):
     
     def on_gemini_help(self, event: wx.Event):
         logging.info("- Launching Gemini AI Assistant (Native wx.html2)")
+        logging.info("- Gemini AI Assistant starten (Native wx.html2)")
         
-        # FIX: Standard-Stil verwenden (verhindert das Verschwinden der macOS-Knöpfe)
+        # FIX: Explizite Übergabe der macOS-Standard-Styles (Systemmenü + Titel + Schließen-Button)
         help_frame = wx.Frame(
             self, 
             title='Gemini AI Assistant', 
             size=(500, 850), 
-            style=wx.DEFAULT_FRAME_STYLE
+            style=wx.SYSTEM_MENU | wx.CAPTION | wx.CLOSE_BOX | wx.RESIZE_BORDER
         )
         help_frame.SetMinSize((400, 600))
         
         panel = wx.Panel(help_frame)
         sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # WebView an das Panel binden
         browser = wx.html2.WebView.New(panel, style=wx.BORDER_NONE)
         browser.LoadURL('https://gemini.google.com')
         
@@ -374,12 +378,12 @@ class MainFrame(wx.Frame):
         
         self.active_gemini_frame = help_frame
         
-        # Internen Cleanup-Callback binden
+        # Cleanup-Callback beim Schließen über das rote 'X'
         help_frame.Bind(wx.EVT_CLOSE, lambda e: [wx.CallAfter(help_frame.Destroy), setattr(self, 'active_gemini_frame', None)])
         
         help_frame.Centre()
         help_frame.Show()
-        help_frame.Raise()
+        help_frame.Raise()  # Bringt das Fenster in den Fokus
 
     def on_build_and_install(self, event: wx.Event = None):
         try:
