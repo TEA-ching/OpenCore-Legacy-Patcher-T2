@@ -12,6 +12,7 @@ import requests
 import markdown2
 import threading
 import webbrowser
+import shutil
 from pathlib import Path
 from packaging import version
 
@@ -55,15 +56,12 @@ class MainFrame(wx.Frame):
         self.Centre()
         self.Show()
 
-
         self._preflight_checks()
-
 
     def _generate_elements(self) -> None:
         """
         Generate UI elements for the main menu
         """
-
         # Logo
         logo = wx.StaticBitmap(self, bitmap=wx.Bitmap(str(self.constants.icns_resource_path / "OC-Patcher.icns"), wx.BITMAP_TYPE_ICON), pos=(-1, 0), size=(128, 128))
         logo.Centre(wx.HORIZONTAL)
@@ -140,7 +138,7 @@ class MainFrame(wx.Frame):
                 button_y = model_label.GetPosition()[1] + 30
 
         # --- FOOTER BUTTONS (Settings & Gemini) ---
-        total_footer_width = 120 + 10 + 150 # Buttons + gap
+        total_footer_width = 120 + 10 + 150 
         start_x = (self.GetSize().width - total_footer_width) // 2
         footer_y = max_height + 10
 
@@ -190,9 +188,8 @@ class MainFrame(wx.Frame):
         except Exception as e:
             print(f"DEBUG: Preflight error: {e}")
 
-        # Fix: Spin up exactly ONE daemon thread, and track it
         self.update_thread = threading.Thread(target=self._check_for_updates)
-        self.update_thread.daemon = True  # Allows python to exit cleanly even if thread hangs
+        self.update_thread.daemon = True  
         self.update_thread.start()
 
         if "--update_installed" in sys.argv and self.constants.has_checked_updates is False and gui_support.CheckProperties(self.constants).host_can_build():
@@ -233,7 +230,6 @@ class MainFrame(wx.Frame):
         self.constants.ignore_updates = False
         self.constants.has_checked_updates = True
         
-        # 1. Fetch update info
         update_dict = updates.CheckBinaryUpdates(self.constants).check_binary_updates()
         if not update_dict:
             return
@@ -242,131 +238,51 @@ class MainFrame(wx.Frame):
         local_version_str = self.constants.patcher_version
     
         try:
-            # 2. Robust Comparison
             remote_v = version.parse(str(remote_version_str))
             local_v = version.parse(local_version_str)
     
-            # Only trigger if remote is NEWER. 
-            # If remote <= local, we are already up to date or ahead.
             if remote_v <= local_v:
                 logging.info(f"{self.constants.patcher_name} is up to date. (Local: {local_v} >= Remote: {remote_v})")
                 return
     
         except version.InvalidVersion:
-            # Fallback for non-standard strings: only prompt if they are not identical
             if remote_version_str == local_version_str:
                 return
     
-        # 3. Trigger update
         logging.info(f"Newer version detected: {remote_version_str}")
-        wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"])
         
-    def on_build_and_install(self, event: wx.Event = None):
-        try:
-            self.Hide()
-            gui_build.BuildFrame(
-                parent=None,
-                title=self.title,
-                global_constants=self.constants,
-                screen_location=self.GetPosition()
-            )
-            self.Destroy()
-        except Exception as e:
-            logging.error("Es schlägt fehl, Build and Install OpenCore zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
-            logging.error("We failed to open up Build and Install OpenCore due to invalid syntax. The error is the following:")
-            logging.exception("Stack Trace:")
-            logging.info("Bitte versuchen Sie später erneut.")
-            logging.info("Please try again later.")
-
-
-    def on_post_install_root_patch(self, event: wx.Event = None):
-        try:
-            gui_sys_patch_display.SysPatchDisplayFrame(
-                parent=self,
-                title=self.title,
-                global_constants=self.constants,
-                screen_location=self.GetPosition()
-            )
-        except Exception as e:
-            logging.error("Es schlägt fehl, Install drivers and patches zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
-            logging.error("We failed to open up Install drivers and patches due to invalid syntax. The error is the following:")
-            logging.exception("Stack Trace:")
-            logging.info("Bitte versuchen Sie später erneut.")
-            logging.info("Please try again later.")
-
-
-    def on_create_macos_installer(self, event: wx.Event = None):
-        try:
-            gui_macos_installer_download.macOSInstallerDownloadFrame(
-                parent=self,
-                title=self.title,
-                global_constants=self.constants,
-                screen_location=self.GetPosition()
-            )
-        except Exception as e:
-            logging.error("Es schlägt fehl, Download macOS zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
-            logging.error("We failed to open up Download macOS due to invalid syntax. The error is the following:")
-            logging.exception("Stack Trace:")
-            logging.info("Bitte versuchen Sie später erneut.")
-            logging.info("Please try again later.")
-
-
-    def on_settings(self, event: wx.Event = None):
-        try:
-            gui_settings.SettingsFrame(
-                parent=self,
-                title=self.title,
-                global_constants=self.constants,
-                screen_location=self.GetPosition()
-            )
-        except Exception as e:
-            logging.error("Es schlägt fehl, die Einstellungen zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
-            logging.error("We failed to open up Settings to invalid syntax. The error is the following:")
-            logging.exception("Stack Trace:")
-            logging.info("Bitte versuchen Sie später erneut.")
-            logging.info("Please try again later.")
-
-    def on_help(self, event: wx.Event = None):
-        try:
-            gui_help.HelpFrame(
-                parent=self,
-                title=self.title,
-                global_constants=self.constants,
-                screen_location=self.GetPosition()
-            )
-        except Exception as e:
-            logging.error("Es schlägt fehl, die Hilfe-Seite zu laden wegen invalider Syntax. Das Fehler ist die Folgende:")
-            logging.error("We failed to open up Help due to invalid syntax. The error is the following:")
-            logging.exception("Stack Trace:")
-            logging.info("Bitte versuchen Sie später erneut.")
-            logging.info("Please try again later.")
-
-    def on_update(self, oclp_url: str, oclp_version: str, oclp_github_url: str):
-
-        ID_GITHUB = wx.NewId()
-        ID_UPDATE = wx.NewId()
-
+        # FIX: Netzwerk-Request für den Changelog in den Hintergrundthread verschoben!
         url = "https://api.github.com/repos/albert-mueller/OpenCore-Legacy-Patcher-T2/releases/latest"
-        response = requests.get(url).json()
+        changelog = """## Unable to fetch changelog\n\nPlease check the Github page for more information."""
         try:
-            changelog = response["body"].split("## Asset Information")[0]
-        except: #if user constantly checks for updates, github will rate limit them
-            changelog = """## Unable to fetch changelog
+            # User-Agent hinzugefügt, um GitHub Rate-Limits zu minimieren
+            response = requests.get(url, headers={"User-Agent": "OpenCore-Legacy-Patcher-T2"}, timeout=10).json()
+            if "body" in response:
+                changelog = response["body"].split("## Asset Information")[0]
+        except Exception as e:
+            logging.error(f"Failed to fetch changelog text: {e}")
 
-Please check the Github page for more information about this release."""
+        # Sicher an den Main-Thread übergeben samt extrahiertem Changelog
+        wx.CallAfter(self.on_update, update_dict["Link"], remote_version_str, update_dict["Github Link"], changelog)
+        
+    # FIX: changelog_text als Parameter hinzugefügt, um UI-Blocking zu verhindern
+    def on_update(self, oclp_url: str, oclp_version: str, oclp_github_url: str, changelog_text: str):
 
-        html_markdown = markdown2.markdown(changelog, extras=["tables"])
+        ID_GITHUB = wx.NewIdRef() if hasattr(wx, "NewIdRef") else wx.NewId()
+        ID_UPDATE = wx.NewIdRef() if hasattr(wx, "NewIdRef") else wx.NewId()
+
+        html_markdown = markdown2.markdown(changelog_text, extras=["tables"])
         html_css = css_data.updater_css
         frame = wx.Dialog(None, -1, title="", size=(650, 500))
         frame.SetMinSize((650, 500))
         frame.SetWindowStyle(wx.STAY_ON_TOP)
         panel = wx.Panel(frame)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(10)
+        
         self.title_text = wx.StaticText(panel, label=f"A new version of {self.constants.patcher_name} is available!")
         self.description = wx.StaticText(panel, label=f"{self.constants.patcher_name} {oclp_version} is now available - You have {self.constants.patcher_version_label}. Would you like to update?")
         self.title_text.SetFont(gui_support.font_factory(19, wx.FONTWEIGHT_BOLD))
         self.description.SetFont(gui_support.font_factory(13, wx.FONTWEIGHT_NORMAL))
+        
         self.web_view = wx.html2.WebView.New(panel, style=wx.BORDER_SUNKEN)
         html_code = f'''
 <html>
@@ -383,6 +299,7 @@ Please check the Github page for more information about this release."""
         self.web_view.SetPage(html_code, "")
         self.web_view.Bind(wx.html2.EVT_WEBVIEW_NEWWINDOW, self._onWebviewNav)
         self.web_view.EnableContextMenu(False)
+        
         self.close_button = wx.Button(panel, label="Dismiss")
         self.close_button.Bind(wx.EVT_BUTTON, lambda event: frame.EndModal(wx.ID_CANCEL))
         self.view_button = wx.Button(panel, ID_GITHUB, label="View on GitHub")
@@ -395,6 +312,7 @@ Please check the Github page for more information about this release."""
         buttonsizer.Add(self.close_button, 0, wx.ALIGN_CENTRE | wx.RIGHT, 5)
         buttonsizer.Add(self.view_button, 0, wx.ALIGN_CENTRE | wx.LEFT|wx.RIGHT, 5)
         buttonsizer.Add(self.install_button, 0, wx.ALIGN_CENTRE | wx.LEFT, 5)
+        
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(self.title_text, 0, wx.ALIGN_CENTRE | wx.TOP, 20)
         sizer.Add(self.description, 0, wx.ALIGN_CENTRE | wx.BOTTOM, 20)
@@ -405,18 +323,17 @@ Please check the Github page for more information about this release."""
 
         result = frame.ShowModal()
 
-
         if result == ID_GITHUB:
             webbrowser.open(oclp_github_url)
         elif result == ID_UPDATE:
             gui_update.UpdateFrame(
-            parent=self,
-            title=self.title,
-            global_constants=self.constants,
-            screen_location=self.GetPosition(),
-            url=oclp_url,
-            version_label=oclp_version
-        )
+                parent=self,
+                title=self.title,
+                global_constants=self.constants,
+                screen_location=self.GetPosition(),
+                url=oclp_url,
+                version_label=oclp_version
+            )
 
         frame.Destroy()
 
@@ -427,7 +344,6 @@ Please check the Github page for more information about this release."""
     def on_gemini_help(self, event: wx.Event):
         logging.info("- Launching Gemini AI Assistant (Native wx.html2)")
         
-        # Create a non-blocking Frame child of the main menu
         help_frame = wx.Frame(
             self, 
             title='Gemini AI Assistant', 
@@ -439,7 +355,6 @@ Please check the Github page for more information about this release."""
         panel = wx.Panel(help_frame)
         sizer = wx.BoxSizer(wx.VERTICAL)
         
-        # This safely hooks into macOS's native WebKit via wxWidgets on the Main Thread
         browser = wx.html2.WebView.New(panel, style=wx.BORDER_NONE)
         browser.LoadURL('https://gemini.google.com')
         
@@ -447,4 +362,37 @@ Please check the Github page for more information about this release."""
         panel.SetSizer(sizer)
         
         help_frame.Centre()
-        help_frame.Show() # Opens non-blocking window seamlessly
+        help_frame.Show()
+
+    # Die restlichen on_X-Methoden bleiben identisch...
+    def on_build_and_install(self, event: wx.Event = None):
+        try:
+            self.Hide()
+            gui_build.BuildFrame(parent=None, title=self.title, global_constants=self.constants, screen_location=self.GetPosition())
+            self.Destroy()
+        except Exception as e:
+            logging.error(f"We failed to open up Build and Install OpenCore: {e}")
+
+    def on_post_install_root_patch(self, event: wx.Event = None):
+        try:
+            gui_sys_patch_display.SysPatchDisplayFrame(parent=self, title=self.title, global_constants=self.constants, screen_location=self.GetPosition())
+        except Exception as e:
+            logging.error(f"We failed to open up Install drivers and patches: {e}")
+
+    def on_create_macos_installer(self, event: wx.Event = None):
+        try:
+            gui_macos_installer_download.macOSInstallerDownloadFrame(parent=self, title=self.title, global_constants=self.constants, screen_location=self.GetPosition())
+        except Exception as e:
+            logging.error(f"We failed to open up Download macOS: {e}")
+
+    def on_settings(self, event: wx.Event = None):
+        try:
+            gui_settings.SettingsFrame(parent=self, title=self.title, global_constants=self.constants, screen_location=self.GetPosition())
+        except Exception as e:
+            logging.error(f"We failed to open up Settings: {e}")
+
+    def on_help(self, event: wx.Event = None):
+        try:
+            gui_help.HelpFrame(parent=self, title=self.title, global_constants=self.constants, screen_location=self.GetPosition())
+        except Exception as e:
+            logging.error(f"We failed to open up Help: {e}")
