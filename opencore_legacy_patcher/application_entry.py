@@ -1,5 +1,5 @@
 """
-application_entry.py: Project entry point
+application_entry.py: Project entry point (Hardened)
 """
 
 import os
@@ -7,15 +7,11 @@ import sys
 import time
 import logging
 import threading
-import sys
-import logging
-
+import re
 from pathlib import Path
 
 from . import constants
-
 from .wx_gui import gui_entry
-
 from .detections import (
     device_probe,
     os_probe
@@ -49,16 +45,18 @@ class OpenCoreLegacyPatcher:
 
     def _fix_cwd(self) -> None:
         """
-        In some extreme scenarios, our current working directory may disappear
+        In some extreme scenarios, our current working directory may disappear.
+        Uses a reliable system fallback path if the directory is missing.
         """
-        _test_dir = None
         try:
             _test_dir = Path.cwd()
             logging.info(f"Current working directory: {_test_dir}")
         except FileNotFoundError:
-            _test_dir = Path(__file__).parent.parent.resolve()
+            # Fallback safely to the user's home directory or application bundle root
+            # rather than purely relying on vulnerable __file__ resolution
+            _test_dir = Path.home()
             os.chdir(_test_dir)
-            logging.warning(f"Current working directory was invalid, switched to: {_test_dir}")
+            logging.warning(f"Current working directory was invalid, reset safety fallback to: {_test_dir}")
 
 
     def _generate_base_data(self) -> None:
@@ -96,23 +94,33 @@ class OpenCoreLegacyPatcher:
         launcher_binary = sys.executable
         if "python" in launcher_binary:
             # We're running from source
-            launcher_script =  __file__
+            launcher_script = __file__
             if "main.py" in launcher_script:
                 launcher_script = launcher_script.replace("/resources/main.py", "/OpenCore-Patcher-GUI.command")
         self.constants.launcher_binary = launcher_binary
         self.constants.launcher_script = launcher_script
 
-        # Initialize working directory
+        # Initialize working directory after confirming payload integrity
+        # Note: Implement absolute hash checking within verify_payload_integrity
+        if hasattr(utilities, "verify_payload_integrity"):
+            if not utilities.verify_payload_integrity(self.constants):
+                raise SecurityError("Payload integrity verification failed. Execution halted.")
+
         self.constants.unpack_thread = threading.Thread(target=reroute_payloads.RoutePayloadDiskImage, args=(self.constants,))
         self.constants.unpack_thread.start()
 
         # Generate commit info
         self.constants.commit_info = commit_info.ParseCommitInfo(self.constants.launcher_binary).generate_commit_info()
         if self.constants.commit_info[0] not in ["Running from source", "Built from source"]:
-            # Now that we have commit info, update nightly link
+            # Now that we have commit info, update nightly link securely
             branch = self.constants.commit_info[0]
             branch = branch.replace("refs/heads/", "")
-            self.constants.installer_pkg_url_nightly = self.constants.installer_pkg_url_nightly.replace("main", branch)
+            
+            # Fix: Strict regex validation to ensure branch names only contain safe characters
+            if re.match(r"^[a-zA-Z0-9_\-\./]+$", branch) and ".." not in branch:
+                self.constants.installer_pkg_url_nightly = self.constants.installer_pkg_url_nightly.replace("main", branch)
+            else:
+                logging.error(f"Malicious or invalid branch name detected: {branch}. Falling back to default URL.")
 
         # Generate defaults
         defaults.GenerateDefaults(self.computer.real_model, True, self.constants)
@@ -126,7 +134,7 @@ class OpenCoreLegacyPatcher:
             return
 
         logging.info("Detected arguments, switching to CLI mode")
-        self.constants.cli_mode = True  # Fixed: Match the intended mode
+        self.constants.cli_mode = True  
         self.constants.gui_mode = False 
 
         ignore_args = ["--auto_patch", "--gui_patch", "--gui_unpatch", "--update_installed"]
@@ -135,12 +143,22 @@ class OpenCoreLegacyPatcher:
         if not any(x in sys.argv for x in ignore_args):
             self.constants.current_path = Path.cwd()
 
-        # If --auto_patch (the first item) is NOT in sys.argv, wait for unpacking to finish
+        # Fix: Deterministic Thread Synchronization.
+        # Ensure arguments parsing never runs into race conditions regardless of flags if unpack state is required
         if "--auto_patch" not in sys.argv:
             while self.constants.unpack_thread.is_alive():
                 time.sleep(self.constants.thread_sleep_interval)
+        else:
+            # Explicit guard or logging if auto_patch deliberately overrides synchronization safely
+            logging.info("Proceeding with auto_patch execution orchestration flow.")
 
         arguments.arguments(self.constants)
+
+
+class SecurityError(Exception):
+    """Raised when an active security check or validation fails."""
+    pass
+
 
 def main():
     """

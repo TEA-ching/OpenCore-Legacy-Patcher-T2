@@ -60,26 +60,45 @@ class ModernWireless(BaseHardware):
         if self.native_os() is True:
             return {}
 
-        return {
+        # Workaround for missing airportd in macOS 26 Tahoe (13.7.2-25)
+        # Determine the base version for Tahoe (macOS 26) and other versions
+        if self._xnu_major == os_data.tahoe:  # macOS 26 Tahoe
+            # For Tahoe, use fallback versions since 13.7.2-25 is missing airportd
+            base_version = "13.7.2-24"  # Fallback to Ventura version
+            wifi_agent_version = "14.7.2"  # Use Sonoma version since 15.1 doesn't exist
+        elif self._xnu_major >= os_data.sequoia:  # macOS 14+ Sonoma/Sequoia
+            base_version = f"13.7.2-{self._xnu_major}"
+            wifi_agent_version = "14.7.2"
+        else:  # macOS 13 Ventura and earlier
+            base_version = f"13.7.2-{self._xnu_major}"
+            wifi_agent_version = None
+
+        # Build the patch dictionary
+        patches_dict = {
             "Modern Wireless": {
                 PatchType.OVERWRITE_SYSTEM_VOLUME: {
                     "/usr/libexec": {
-                        "airportd": f"13.7.2-{self._xnu_major}",
-                        "wifip2pd": f"13.7.2-{self._xnu_major}",
-                    },
-                    "/System/Library/CoreServices": {
-                        **({ "WiFiAgent.app": "14.7.2" } if self._xnu_major >= os_data.sequoia else {}),
+                        "airportd": base_version,
+                        "wifip2pd": base_version,
                     },
                 },
                 PatchType.MERGE_SYSTEM_VOLUME: {
                     "/System/Library/Frameworks": {
-                        "CoreWLAN.framework": f"13.7.2-{self._xnu_major}",
+                        "CoreWLAN.framework": base_version,
                     },
                     "/System/Library/PrivateFrameworks": {
-                        "CoreWiFi.framework":       f"13.7.2-{self._xnu_major}",
-                        "IO80211.framework":        f"13.7.2-{self._xnu_major}",
-                        "WiFiPeerToPeer.framework": f"13.7.2-{self._xnu_major}",
+                        "CoreWiFi.framework":       base_version,
+                        "IO80211.framework":        base_version,
+                        "WiFiPeerToPeer.framework": base_version,
                     },
                 }
             },
         }
+
+        # Add WiFiAgent.app for Sonoma and later
+        if wifi_agent_version:
+            patches_dict["Modern Wireless"][PatchType.OVERWRITE_SYSTEM_VOLUME][
+                "/System/Library/CoreServices"
+            ] = {"WiFiAgent.app": wifi_agent_version}
+
+        return patches_dict

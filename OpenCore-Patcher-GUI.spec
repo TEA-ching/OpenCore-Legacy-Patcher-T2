@@ -4,29 +4,36 @@ import os
 import sys
 import time
 import subprocess
-
 from pathlib import Path
 
 from PyInstaller.building.api import PYZ, EXE, COLLECT
 from PyInstaller.building.osx import BUNDLE
 from PyInstaller.building.build_main import Analysis
 
-sys.path.append(os.path.abspath(os.getcwd()))
+# Fix: Use PyInstaller's built-in global 'SPECPATH' instead of '__file__'
+try:
+    SPEC_DIR = Path(SPECPATH).resolve()
+except NameError:
+    SPEC_DIR = Path(os.getcwd()).resolve()
+
+sys.path.append(str(SPEC_DIR))
 
 from opencore_legacy_patcher import constants
 
 block_cipher = None
 
+# Fix: Use the corrected SPEC_DIR absolute variable
 datas = [
-   ('payloads.dmg', '.'),
-   ('Universal-Binaries.dmg', '.'),
+   (str(SPEC_DIR / 'payloads.dmg'), '.'),
+   (str(SPEC_DIR / 'Universal-Binaries.dmg'), '.'),
 ]
 
-if Path("DortaniaInternalResources.dmg").exists():
-   datas.append(('DortaniaInternalResources.dmg', '.'))
+# Fix: Use the corrected SPEC_DIR absolute variable
+if (SPEC_DIR / "DortaniaInternalResources.dmg").exists():
+   datas.append((str(SPEC_DIR / 'DortaniaInternalResources.dmg'), '.'))
 
 
-a = Analysis(['OpenCore-Patcher-GUI.command'],
+a = Analysis([str(SPEC_DIR / 'OpenCore-Patcher-GUI.command')],
              pathex=[],
              binaries=[],
              datas=datas,
@@ -55,7 +62,7 @@ exe = EXE(pyz,
           upx=True,
           console=False,
           disable_windowed_traceback=False,
-          target_arch="x86_64",
+          target_arch=None,  
           codesign_identity=None,
           entitlements_file=None)
 
@@ -70,7 +77,7 @@ coll = COLLECT(exe,
 
 app = BUNDLE(coll,
              name='OpenCore-Patcher.app',
-             icon="payloads/Icon/AppIcons/OC-Patcher.icns",
+             icon=str(SPEC_DIR / "payloads/Icon/AppIcons/OC-Patcher.icns"), # Fix: Use the corrected SPEC_DIR variable
              bundle_identifier="com.dortania.opencore-legacy-patcher",
              info_plist={
                 "CFBundleName": "OpenCore Legacy Patcher",
