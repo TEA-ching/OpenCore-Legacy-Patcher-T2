@@ -134,7 +134,6 @@ class macOSInstallerDownloadFrame(wx.Frame):
             wx.CallAfter(self._on_fetch_success)
 
         thread = threading.Thread(target=_fetch_installers)
-        self.constants.add_thread(thread)  # Falls eine Thread-Tracking-Methode existiert
         thread.start()
 
     def _on_fetch_failed(self):
