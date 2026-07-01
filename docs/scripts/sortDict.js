@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-// Ensure we are in the script's directory
+// Ensure we are operating relative to the script's directory
 process.chdir(__dirname);
 
 const dictPath = "../dictionary/dictionary.txt";
@@ -9,25 +9,25 @@ const ocPath = "../dictionary/opencorekeys.txt";
 console.log("Wörterbücher lesen...");
 console.log("Reading dictionaries...");
 
-// Helper to read file, split by newline, and remove empty lines
+// Helper to read file, split by newline, and filter empty lines
 const readToSet = (filePath) => {
     const content = fs.readFileSync(filePath, { encoding: "utf8" });
     return new Set(content.split("\n").filter(line => line !== ""));
 };
 
-// Loading directly into Sets instantly deduplicates the data
+// Loading data directly into Sets instantly deduplicates it
 const dictSet = readToSet(dictPath);
 const ocSet = readToSet(ocPath);
 
 console.log("Filtern und Aussortierung...");
 console.log("Filtering and Sorting...");
 
-// Instantly remove OpenCore keys from the main dictionary (O(1) complexity)
+// High-speed subtraction: Instantly drop OpenCore keys from main dictionary
 for (const key of ocSet) {
     dictSet.delete(key);
 }
 
-// Convert back to arrays and sort alphabetically
+// Convert back to arrays and sort alphabetically (Standard ASCII/UTF-16 order)
 const sortedDict = Array.from(dictSet).sort();
 const sortedOc = Array.from(ocSet).sort();
 
