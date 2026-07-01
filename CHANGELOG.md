@@ -544,7 +544,7 @@ At this point, the user doesn't see Executing arbitary code, so the attackers ca
 Refactor analytics handling and update binary check logic
 
 1. Fixed: JSON Double-Encoding Payload Failure (High Severity Bug)
-The Problem: In your original code, you ran self.data = json.dumps(self.data), converting the dictionary into a string. Then, you passed it to the network handler via json=self.data. Most Python HTTP libraries (like requests) see a string inside a json= parameter and serialize it again.
+The Problem: In the original code, it ran self.data = json.dumps(self.data), converting the dictionary into a string. Then, the code passed it to the network handler via json=self.data. Most Python HTTP libraries (like requests) see a string inside a json= parameter and serialize it again.
 
 The Result: The server would receive an invalid, double-escaped JSON string wrapper (e.g., "{\"KEY\": \"...\"}") instead of a readable object, completely breaking your backend's parser.
 
