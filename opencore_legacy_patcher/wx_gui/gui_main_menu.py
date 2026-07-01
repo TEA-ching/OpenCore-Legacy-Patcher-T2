@@ -425,22 +425,26 @@ Please check the Github page for more information about this release."""
         webbrowser.open(url)
     
     def on_gemini_help(self, event: wx.Event):
-        import webview 
+        logging.info("- Launching Gemini AI Assistant (Native wx.html2)")
         
-        logging.info("- Launching Gemini AI Assistant (pywebview)")
+        # Create a non-blocking Frame child of the main menu
+        help_frame = wx.Frame(
+            self, 
+            title='Gemini AI Assistant', 
+            size=(500, 850),
+            style=wx.DEFAULT_FRAME_STYLE & ~(wx.MAXIMIZE_BOX)
+        )
+        help_frame.SetMinSize((400, 600))
         
-        def launch_webview():
-            window = webview.create_window(
-                title='Gemini AI Assistant',
-                url='https://gemini.google.com',
-                width=500,
-                height=850,
-                confirm_close=False,
-                background_color='#ffffff'
-            )
-            webview.start()
-
-        # Fix: Isolate the blocking webview mainloop from wxPython's UI thread
-        webview_thread = threading.Thread(target=launch_webview)
-        webview_thread.daemon = True
-        webview_thread.start()
+        panel = wx.Panel(help_frame)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # This safely hooks into macOS's native WebKit via wxWidgets on the Main Thread
+        browser = wx.html2.WebView.New(panel, style=wx.BORDER_NONE)
+        browser.LoadURL('https://gemini.google.com')
+        
+        sizer.Add(browser, 1, wx.EXPAND)
+        panel.SetSizer(sizer)
+        
+        help_frame.Centre()
+        help_frame.Show() # Opens non-blocking window seamlessly
