@@ -1,6 +1,6 @@
 # OpenCore Legacy Patcher T2 changelog / OpenCore Legacy Patcher T2-Änderungslog
 
-## 4.0.0 alpha 15.3
+## 4.0.0 alpha 15.3 (about to be released)
 This version fixes a CI/CD bug where building the application takes 120 seconds instead of 60-90 seconds.
 
 ## 4.0.0 alpha 15.1
